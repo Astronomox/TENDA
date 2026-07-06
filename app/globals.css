@@ -1,0 +1,46 @@
+@import "tailwindcss";
+
+:root {
+  --tenda-orange:       #E85D04;
+  --tenda-orange-light: #FF8C42;
+  --tenda-orange-dim:   #FFF0E6;
+  --tenda-white:        #FFFFFF;
+  --tenda-cream:        #FAFAF8;
+  --tenda-ink:          #1A1A1A;
+  --tenda-slate:        #4A5568;
+  --tenda-border:       #E8E8E4;
+  --tenda-success:      #16A34A;
+  --tenda-danger:       #DC2626;
+  --tenda-warn:         #D97706;
+}
+
+@theme inline {
+  --color-background: var(--tenda-cream);
+  --color-foreground: var(--tenda-ink);
+  --font-sans: 'Manrope', system-ui, sans-serif;
+  --font-display: 'Sora', system-ui, sans-serif;
+  --font-mono: 'JetBrains Mono', monospace;
+}
+
+* { box-sizing: border-box; }
+
+html {
+  scroll-behavior: smooth;
+  scroll-snap-type: y proximity;
+}
+
+body {
+  background: var(--tenda-cream);
+  color: var(--tenda-ink);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+}
+
+.font-display { font-family: var(--font-display); }
+.font-mono    { font-family: var(--font-mono); }
+
+/* Snap on the natural document scroll - no fragile inner container */
+.snap-section {
+  scroll-snap-align: start;
+  min-height: 100vh;
+}
