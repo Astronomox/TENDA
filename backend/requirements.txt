@@ -1,0 +1,26 @@
+# Exact versions that passed the test suite on SQLite and PostgreSQL 17.
+# Upgrade deliberately: bump a pin, run `python -m pytest`, then regenerate constraints.txt
+# with `pip freeze > constraints.txt`.
+-c constraints.txt
+
+fastapi[standard]==0.141.1
+uvicorn[standard]==0.52.4
+sqlalchemy[asyncio]==2.0.52
+aiosqlite==0.22.1
+# PostgreSQL driver (production)
+asyncpg==0.31.0
+# Versioned database migrations (Postgres)
+alembic==1.20.0
+pydantic==2.13.5
+pydantic-settings==2.15.0
+bcrypt==5.0.0
+pyjwt==2.13.0
+python-multipart==0.0.32
+google-genai==2.20.0
+python-dotenv==1.2.3
+email-validator==2.3.0
+httpx==0.28.1
+# Africa/Lagos timezone data (Windows has no system tz database)
+tzdata==2026.4
+# Reads audio duration for the 120 s limit (no ffmpeg needed)
+mutagen==1.48.1
