@@ -1,0 +1,121 @@
+"use client";
+
+/**
+ * lib/auth.ts
+ *
+ * Browser-side session for the TENDA backend (BACKEND_README.md §4).
+ * The backend issues a JWT; we keep it in localStorage and attach it as
+ * `Authorization: Bearer …`. The payload is decoded (not verified) only to
+ * read `sub` (email) and `exp` for UX — the backend is the source of truth.
+ */
+
+import { useSyncExternalStore } from "react";
+
+const TOKEN_KEY = "tenda_token";
+const REFRESH_KEY = "tenda_refresh_token";
+
+export interface TokenClaims {
+  email: string;
+  /** Unix seconds */
+  exp: number;
+}
+
+const listeners = new Set<() => void>();
+const emit = () => listeners.forEach((l) => l());
+
+function safeGet(key: string): string | null {
+  try {
+    return window.localStorage.getItem(key);
+  } catch {
+    return null;
+  }
+}
+
+function safeSet(key: string, value: string | null) {
+  try {
+    if (value === null) window.localStorage.removeItem(key);
+    else window.localStorage.setItem(key, value);
+  } catch {
+    // Private mode / storage blocked: the session just won't survive a reload.
+  }
+}
+
+export function decodeToken(token: string | null): TokenClaims | null {
+  if (!token) return null;
+  const part = token.split(".")[1];
+  if (!part) return null;
+  try {
+    const b64 = part.replace(/-/g, "+").replace(/_/g, "/");
+    const json = JSON.parse(atob(b64 + "=".repeat((4 - (b64.length % 4)) % 4)));
+    if (typeof json.exp !== "number") return null;
+    return { email: typeof json.sub === "string" ? json.sub : "", exp: json.exp };
+  } catch {
+    return null;
+  }
+}
+
+export function getToken(): string | null {
+  const token = safeGet(TOKEN_KEY);
+  const claims = decodeToken(token);
+  if (!claims || claims.exp * 1000 <= Date.now()) return null;
+  return token;
+}
+
+export function getRefreshToken(): string | null {
+  return safeGet(REFRESH_KEY);
+}
+
+export function setTokens(access: string, refresh?: string | null) {
+  safeSet(TOKEN_KEY, access);
+  if (refresh !== undefined) safeSet(REFRESH_KEY, refresh ?? null);
+  emit();
+}
+
+export function clearTokens() {
+  safeSet(TOKEN_KEY, null);
+  safeSet(REFRESH_KEY, null);
+  emit();
+}
+
+export function getClaims(): TokenClaims | null {
+  return decodeToken(getToken());
+}
+
+/** Navigates to the login page, preserving where the user was. */
+export function redirectToLogin(expired = false) {
+  if (typeof window === "undefined") return;
+  if (window.location.pathname.startsWith("/login")) return;
+  const params = new URLSearchParams({ next: window.location.pathname + window.location.search });
+  if (expired) params.set("expired", "1");
+  window.location.assign(`/login?${params}`);
+}
+
+/** Only allow same-site relative paths as post-login destinations. */
+export function safeNext(next: string | null | undefined): string {
+  if (!next || !next.startsWith("/") || next.startsWith("//")) return "/dashboard";
+  return next;
+}
+
+function subscribe(listener: () => void) {
+  listeners.add(listener);
+  const onStorage = (e: StorageEvent) => {
+    if (e.key === TOKEN_KEY || e.key === null) listener();
+  };
+  window.addEventListener("storage", onStorage);
+  return () => {
+    listeners.delete(listener);
+    window.removeEventListener("storage", onStorage);
+  };
+}
+
+/**
+ * Current token, reactive across tabs. `undefined` while hydrating (server and
+ * first client render), `null` when signed out.
+ */
+export function useToken(): string | null | undefined {
+  return useSyncExternalStore(
+    subscribe,
+    () => getToken(),
+    () => undefined
+  );
+}
