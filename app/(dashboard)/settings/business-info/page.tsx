@@ -1,54 +1,52 @@
-import Link from "next/link";
-export default function BusinessConfiguration() {
+"use client";
+
+import { useState } from "react";
+import ProfileForm, { Section } from "../ProfileForm";
+import { useCurrentUser } from "@/components/AuthGate";
+import { auth } from "@/lib/api";
+import { FieldLabel, inputClass } from "@/components/ui";
+
+export default function BusinessInfo() {
+  const { user, refreshUser } = useCurrentUser();
+  const [ownerName, setOwnerName] = useState(user.full_name ?? "");
+
   return (
-    <div className="min-h-screen bg-[#FAFAF8] flex justify-center px-4 py-12 text-[#1A1A1A]">
-      <form className="w-full max-w-md bg-white border border-[#E8E8E4] rounded-2xl shadow-[0_1px_3px_rgba(0,0,0,0.06)] p-6 space-y-8">
-
-
-        {/* Header */}
-        <div className="space-y-1">
-          <h1 className="font-display font-extrabold tracking-tight text-2xl lg:text-3xl text-[#1A1A1A]">
-            Business Configuration
-          </h1>
-          <p className="text-sm text-[#4A5568]">
-            Teach TENDA how your business sells
-          </p>
-        </div>
-
-
-        {/* Identity */}
-        <section className="space-y-4">
-          <h2 className="text-xs uppercase tracking-widest text-[#A0AEC0] font-semibold">
-            Identity
-          </h2>
-
-
+    <ProfileForm
+      title="Business Info"
+      subtitle="Teach TENDA who you are"
+      next={{ href: "/settings/business-intent", label: "Next: your goals" }}
+      validate={(d) =>
+        (d.business_name ?? "").trim().length > 80 || ownerName.trim().length > 80 ? "Names must be 80 characters or fewer." : null
+      }
+      extraSave={async () => {
+        const name = ownerName.trim() || null;
+        if (name !== (user.full_name ?? null)) {
+          await auth.updateMe({ full_name: name });
+          await refreshUser();
+        }
+      }}
+    >
+      {(draft, set) => (
+        <Section title="Identity">
           <div>
-            <label className="text-sm font-medium text-[#4A5568] mb-1.5 block">Business Name</label>
-            <input
-              defaultValue="Tenda Bags"
-              className="w-full h-12 bg-white border border-[#E8E8E4] rounded-xl px-4 text-sm text-[#1A1A1A] focus:outline-none focus:border-[#E85D04] focus:ring-2 focus:ring-[#E85D04]/10 transition"
-            />
+            <FieldLabel htmlFor="owner">Your name</FieldLabel>
+            <input id="owner" value={ownerName} maxLength={80} onChange={(e) => setOwnerName(e.target.value)}
+              placeholder="e.g. Amina Bello" className={inputClass} />
           </div>
-
-
           <div>
-            <label className="text-sm font-medium text-[#4A5568] mb-1.5 block">Currency</label>
-            <select className="w-full h-12 bg-white border border-[#E8E8E4] rounded-xl px-4 text-sm text-[#1A1A1A] focus:outline-none focus:border-[#E85D04] focus:ring-2 focus:ring-[#E85D04]/10 transition">
-              <option>NGN</option>
+            <FieldLabel htmlFor="bname">Business name</FieldLabel>
+            <input id="bname" value={draft.business_name ?? ""} maxLength={80}
+              onChange={(e) => set({ business_name: e.target.value || null })}
+              placeholder="e.g. Amina Beauty" className={inputClass} />
+          </div>
+          <div>
+            <FieldLabel htmlFor="currency">Currency</FieldLabel>
+            <select id="currency" value={draft.currency} onChange={() => set({ currency: "NGN" })} className={inputClass}>
+              <option value="NGN">NGN — Nigerian Naira (₦)</option>
             </select>
           </div>
-        </section>
-
-
-       
-        {/* Save */}
-        <button className="w-full bg-[#E85D04] hover:bg-[#FF8C42] active:scale-95 text-white py-3.5 rounded-xl text-sm font-semibold transition-all shadow-[0_4px_20px_rgba(232,93,4,0.25)]">
-          Save Changes
-        </button>
-
-      <Link href="/settings/business-structure" className="block text-center text-sm font-semibold text-[#E85D04] hover:text-[#FF8C42] transition-colors">Next</Link>
-      </form>
-    </div>
+        </Section>
+      )}
+    </ProfileForm>
   );
 }
