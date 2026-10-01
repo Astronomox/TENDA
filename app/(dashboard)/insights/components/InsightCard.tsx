@@ -19,6 +19,8 @@ export interface Insight {
   confidence: number; // 0–100
   ctaLabel?: string;
   onCta?: () => void;
+  /** Figures shown in the detail panel. */
+  supporting?: { label: string; value: string; sub?: string }[];
 }
 
 interface InsightCardProps {

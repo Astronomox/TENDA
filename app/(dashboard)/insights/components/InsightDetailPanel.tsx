@@ -9,22 +9,6 @@ interface InsightDetailPanelProps {
   onClose: () => void;
 }
 
-// Supporting data points keyed by insight id (seed data)
-const SUPPORTING_DATA: Record<string, { label: string; value: string; sub?: string }[]> = {
-  "revenue-1": [
-    { label: "Total revenue", value: "₦450,000", sub: "+12% vs last month" },
-    { label: "Highest day", value: "Friday", sub: "₦81,000 avg" },
-    { label: "Transactions", value: "143", sub: "this period" },
-    { label: "Avg order value", value: "₦3,147", sub: "+8% vs last month" },
-  ],
-  "customer-1": [
-    { label: "At-risk customers", value: "47", sub: "no purchase in 14+ days" },
-    { label: "Churn probability", value: "68%", sub: "if not engaged this week" },
-    { label: "Avg lifetime value", value: "₦28,400", sub: "for this segment" },
-    { label: "Last contacted", value: "Never", sub: "via Tenda" },
-  ],
-};
-
 const TREND_ICONS = {
   up:      <TrendingUp  className="w-4 h-4 text-green-500" />,
   down:    <TrendingDown className="w-4 h-4 text-red-500" />,
@@ -34,7 +18,7 @@ const TREND_ICONS = {
 export default function InsightDetailPanel({ insight, onClose }: InsightDetailPanelProps) {
   if (!insight) return null;
 
-  const supporting = SUPPORTING_DATA[insight.id] ?? [];
+  const supporting = insight.supporting ?? [];
 
   return (
     <>
@@ -94,7 +78,7 @@ export default function InsightDetailPanel({ insight, onClose }: InsightDetailPa
               />
             </div>
             <p className="text-[10px] text-[#A0AEC0] mt-2">
-              Based on {(insight.confidence > 75 ? "strong" : "moderate")} signal strength from your last 30 days of data.
+              Based on {insight.confidence >= 75 ? "strong" : insight.confidence >= 55 ? "moderate" : "limited"} evidence in the sales you&apos;ve logged.
             </p>
           </div>
 

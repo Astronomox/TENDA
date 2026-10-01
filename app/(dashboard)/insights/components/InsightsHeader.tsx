@@ -11,6 +11,7 @@ interface InsightsHeaderProps {
   lastUpdated: string;
   onRefresh: () => void;
   isRefreshing: boolean;
+  basedOn?: { customers: number; transactions: number } | null;
 }
 
 const RANGES: { value: TimeRange; label: string }[] = [
@@ -25,6 +26,7 @@ export default function InsightsHeader({
   lastUpdated,
   onRefresh,
   isRefreshing,
+  basedOn,
 }: InsightsHeaderProps) {
   return (
     <div className="mb-6 lg:mb-8">
@@ -81,13 +83,18 @@ export default function InsightsHeader({
       {/* Context summary bar */}
       <div className="mt-4 flex items-center gap-2 text-xs text-[#A0AEC0] flex-wrap">
         <span className="flex items-center gap-1.5">
-          <span className="w-1.5 h-1.5 rounded-full bg-green-400 inline-block" />
-          AI analysis up to date
+          <span className={`w-1.5 h-1.5 rounded-full inline-block ${isRefreshing ? "bg-amber-400" : "bg-green-400"}`} />
+          {isRefreshing ? "Updating…" : `Last updated ${lastUpdated}`}
         </span>
-        <span className="text-[#E8E8E4]">·</span>
-        <span>Last updated {lastUpdated}</span>
-        <span className="text-[#E8E8E4]">·</span>
-        <span>Based on 1,284 customers &amp; 143 transactions</span>
+        {basedOn && (
+          <>
+            <span className="text-[#E8E8E4]">·</span>
+            <span>
+              Based on {basedOn.customers.toLocaleString()} customer{basedOn.customers === 1 ? "" : "s"} &amp;{" "}
+              {basedOn.transactions.toLocaleString()} transaction{basedOn.transactions === 1 ? "" : "s"}
+            </span>
+          </>
+        )}
       </div>
     </div>
   );
