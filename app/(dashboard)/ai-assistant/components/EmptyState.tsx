@@ -8,7 +8,7 @@ const EXAMPLE_PROMPTS = [
   { icon: TrendingDown,  label: "Which customers haven't returned in 2+ weeks?" },
   { icon: RefreshCw,     label: "What products drive the most repeat purchases?" },
   { icon: DollarSign,    label: "Summarise my revenue trend for this week" },
-  { icon: AlertTriangle, label: "Which sales categories are declining?" },
+  { icon: AlertTriangle, label: "Which products are selling less than before?" },
   { icon: BarChart2,     label: "Show me customer retention insights" },
 ];
 
@@ -36,7 +36,7 @@ export default function EmptyState({ onPromptClick }: EmptyStateProps) {
       </h2>
       <p className="text-sm text-[#718096] max-w-sm leading-relaxed mb-8">
         Ask anything about your customers, sales trends, product performance,
-        or retention risks. I&apos;m analyzing your last 30 days of data.
+        or who to follow up with. Answers are based on the sales you&apos;ve logged.
       </p>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 w-full max-w-xl">

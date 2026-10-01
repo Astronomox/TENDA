@@ -1,30 +1,14 @@
 "use client";
 
 /**
- * app/ai-assistant/page.tsx
+ * AI Chat — POST /ai/chat, with conversation history from /ai/conversations
+ * (BACKEND_README.md §15). If the backend doesn't persist conversations yet,
+ * the chat still works for the current visit by sending `history` itself.
  *
- * ── Layout Integration Notes ─────────────────────────────────────────────────
- *
- * DashboardLayout (layout.tsx) provides:
- *   • Desktop: fixed left sidebar (w-64) + right flex-1 column with sticky h-20 topbar
- *   • Mobile: fixed top header (h-16) + fixed bottom nav (h-16) + scrollable main
- *   • <main> constrains width: max-w-[480px] mx-auto on mobile, max-w-6xl on desktop
- *   • Main has: pt-16 pb-24 (mobile) | pt-8 px-8 pb-12 (lg+)
- *
- * This page MUST:
- *   ✓ NOT recreate a full-screen shell (no h-screen, no fixed sidebars)
- *   ✓ NOT add its own header or footer
- *   ✓ Use -mt-8 -mx-8 -mb-12 on desktop to escape main padding and fill the column
- *   ✓ Use -mt-16 -mx-0 -mb-24 on mobile to escape main padding and fill viewport
- *   ✓ Render its own inner chat sidebar (NOT the nav sidebar — chat history only)
- *   ✓ Keep the chat column scrollable with a fixed input bar at the bottom
- *
- * Layout contract:
- *   Mobile  → full-width, sits between fixed header (top-16) and bottom nav (bottom-16)
- *   Desktop → fills the flex-1 column to the right of the 256px nav sidebar
+ * Layout: escapes the dashboard <main> padding to fill the column (see layout.tsx).
  */
 
-import React, { useState, useRef, useEffect } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import { Bot, Info, PanelLeftClose, PanelLeftOpen } from "lucide-react";
 
 import ChatSidebar, { ChatHistoryItem } from "./components/ChatSidebar";
@@ -33,209 +17,226 @@ import TypingIndicator from "./components/TypingIndicator";
 import PromptInput from "./components/PromptInput";
 import SuggestionsBar from "./components/SuggestionsBar";
 import EmptyState from "./components/EmptyState";
+import { ai, analytics, ApiError } from "@/lib/api";
+import { useResource } from "@/lib/hooks";
+import { naira, number, time } from "@/lib/format";
+import type { ChatTurn } from "@/lib/types";
 
-// ─── Seed data ────────────────────────────────────────────────────────────────
-const HISTORY: ChatHistoryItem[] = [
-  { id: 1, title: "Revenue drop analysis", date: "Today" },
-  { id: 2, title: "Top customers June", date: "Today" },
-  { id: 3, title: "Product repeat rates", date: "Yesterday" },
-  { id: 4, title: "Churn risk customers", date: "Yesterday" },
-  { id: 5, title: "Weekly sales summary", date: "Earlier" },
-  { id: 6, title: "Category performance Q2", date: "Earlier" },
-];
+const MAX_HISTORY_TURNS = 20;
 
-const SEED_MESSAGES: ChatMessage[] = [
-  {
-    id: 1,
-    role: "user",
-    text: "Who are my best customers this month?",
-    time: "10:42 AM",
-  },
-  {
-    id: 2,
-    role: "assistant",
-    time: "10:42 AM",
-    blocks: [
-      {
-        type: "text",
-        content: "Here are your **top 5 customers** by revenue this month (June 2026):",
-      },
-      {
-        type: "table",
-        rows: [
-          ["Customer", "Purchases", "Revenue"],
-          ["Amara Osei", "12", "₦84,500"],
-          ["Fatima Diallo", "9", "₦61,200"],
-          ["Kofi Mensah", "7", "₦47,800"],
-          ["Ngozi Eze", "6", "₦39,100"],
-          ["Emeka Balogun", "5", "₦32,400"],
-        ],
-      },
-      {
-        type: "text",
-        content:
-          "Amara Osei stands out — her purchase frequency is **40% above average**. Consider reaching out with a loyalty offer to keep her engaged.",
-      },
-      {
-        type: "insight",
-        content:
-          "Combined, your top 5 customers represent 29% of total monthly revenue.",
-      },
-    ],
-  },
-];
+let localSeq = 0;
+const localId = () => `m${Date.now()}-${++localSeq}`;
+const nowTime = () => time(new Date().toISOString());
 
-// ─── AI stub response ─────────────────────────────────────────────────────────
-function generateAIResponse(query: string): ChatMessage["blocks"] {
-  return [
-    {
-      type: "text",
-      content: `I'm analyzing your business data for: **"${query}"**`,
-    },
-    {
-      type: "insight",
-      content: "This insight is based on your last 30 days of transactions.",
-    },
-    {
-      type: "text",
-      content:
-        "Your data shows strong signals. I'd recommend reviewing your top customer segments and repeat-purchase categories to prioritize outreach this week.",
-    },
-  ];
+function toTurns(messages: ChatMessage[]): ChatTurn[] {
+  return messages
+    .filter((m) => !m.error)
+    .slice(-MAX_HISTORY_TURNS)
+    .map((m) => ({ role: m.role === "user" ? "user" : "model", content: m.content }));
 }
 
-// ─── Page ─────────────────────────────────────────────────────────────────────
 export default function AIAssistantPage() {
-  const [messages, setMessages] = useState<ChatMessage[]>(SEED_MESSAGES);
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState("");
   const [typing, setTyping] = useState(false);
-  const [activeChat, setActiveChat] = useState(2);
+  const [activeId, setActiveId] = useState<string | null>(null);
+  const [loadingChat, setLoadingChat] = useState(false);
   const [searchQ, setSearchQ] = useState("");
-  // Desktop: chat-history sidebar open/closed (independent of nav sidebar)
   const [historyOpen, setHistoryOpen] = useState(true);
-  // Mobile: drawer state for chat history
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const [sidebarError, setSidebarError] = useState<string | null>(null);
 
-  const bottomRef = useRef<HTMLDivElement>(null);
-  const hasMessages = messages.length > 0;
+  const conversations = useResource("ai:conversations", () => ai.conversations({ limit: 50 }));
+  const context = useResource("analytics:summary", () => analytics.summary());
 
+  // Which conversation the in-flight request belongs to, so a late answer
+  // doesn't land in a chat the user has switched away from.
+  const sessionRef = useRef(0);
+  const scrollRef = useRef<HTMLDivElement>(null);
+
+  // Scroll only the message list. scrollIntoView() would also scroll clipped
+  // ancestors sideways when an answer contains a wide table.
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+    const el = scrollRef.current;
+    if (el) el.scrollTo({ top: el.scrollHeight, behavior: "smooth" });
   }, [messages, typing]);
+
+  const history: ChatHistoryItem[] =
+    conversations.data?.items.map((c) => ({ id: c.id, title: c.title, updatedAt: c.updated_at })) ?? [];
+
+  const sidebarStatus = conversations.notImplemented
+    ? "Saved conversations aren't available yet. This chat lasts until you leave the page."
+    : conversations.error && !conversations.data
+      ? conversations.error.message
+      : conversations.loading && !conversations.data
+        ? "Loading…"
+        : sidebarError;
+
+  const ask = useCallback(
+    async (question: string, prior: ChatMessage[], regenerateServerId?: string) => {
+      const session = sessionRef.current;
+      setTyping(true);
+      try {
+        const res = await ai.chat({
+          question,
+          history: activeId ? [] : toTurns(prior),
+          conversation_id: activeId,
+          regenerate_message_id: regenerateServerId ?? null,
+        });
+        if (session !== sessionRef.current) return;
+        setMessages((prev) => [
+          ...prev,
+          { id: localId(), serverId: res.message_id, role: "assistant", content: res.answer, time: nowTime() },
+        ]);
+        if (res.conversation_id) {
+          const isNew = !activeId;
+          setActiveId(res.conversation_id);
+          if (isNew) {
+            conversations.setData((prev) => {
+              const item = {
+                id: res.conversation_id!,
+                title: question.slice(0, 60),
+                created_at: new Date().toISOString(),
+                updated_at: new Date().toISOString(),
+                message_count: 2,
+              };
+              return prev
+                ? { ...prev, items: [item, ...prev.items.filter((c) => c.id !== item.id)], total: prev.total + 1 }
+                : { items: [item], total: 1, limit: 50, offset: 0 };
+            });
+          }
+        }
+      } catch (err) {
+        if (session !== sessionRef.current) return;
+        const message = err instanceof ApiError ? err.message : "Something went wrong. Please try again.";
+        setMessages((prev) => [...prev, { id: localId(), role: "assistant", content: message, time: nowTime(), error: true }]);
+      } finally {
+        if (session === sessionRef.current) setTyping(false);
+      }
+    },
+    [activeId, conversations]
+  );
 
   function sendMessage(text?: string) {
     const q = (text ?? input).trim();
-    if (!q) return;
-    setInput("");
-
-    const userMsg: ChatMessage = {
-      id: Date.now(),
-      role: "user",
-      text: q,
-      time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
-    };
-    setMessages((prev) => [...prev, userMsg]);
-    setTyping(true);
-    setDrawerOpen(false);
-
-    setTimeout(() => {
-      setTyping(false);
+    if (!q || typing) return;
+    if (q.length > 2000) {
       setMessages((prev) => [
         ...prev,
-        {
-          id: Date.now() + 1,
-          role: "assistant",
-          time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
-          blocks: generateAIResponse(q),
-        },
+        { id: localId(), role: "assistant", content: "That question is too long. Please keep it under 2,000 characters.", time: nowTime(), error: true },
       ]);
-    }, 1800);
-  }
-
-  function handleNewChat() {
-    setMessages([]);
-    setActiveChat(-1);
+      return;
+    }
+    setInput("");
     setDrawerOpen(false);
+    const userMsg: ChatMessage = { id: localId(), role: "user", content: q, time: nowTime() };
+    const prior = messages;
+    setMessages((prev) => [...prev, userMsg]);
+    void ask(q, prior);
   }
 
-  function handleRegenerate(id: number) {
-    // Find the user message before this one and re-run
+  function handleRegenerate(id: string) {
+    if (typing) return;
     const idx = messages.findIndex((m) => m.id === id);
     if (idx < 1) return;
     const userMsg = messages[idx - 1];
     if (userMsg.role !== "user") return;
-    setMessages((prev) => prev.slice(0, idx));
-    setTyping(true);
-    setTimeout(() => {
-      setTyping(false);
-      setMessages((prev) => [
-        ...prev,
-        {
-          id: Date.now(),
-          role: "assistant",
-          time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
-          blocks: generateAIResponse(userMsg.text ?? ""),
-        },
-      ]);
-    }, 1800);
+    const target = messages[idx];
+    const prior = messages.slice(0, idx - 1);
+    setMessages(messages.slice(0, idx));
+    void ask(userMsg.content, prior, target.error ? undefined : target.serverId);
   }
 
+  function handleNewChat() {
+    sessionRef.current++;
+    setMessages([]);
+    setActiveId(null);
+    setTyping(false);
+    setDrawerOpen(false);
+  }
+
+  async function handleSelectChat(id: string) {
+    if (id === activeId) {
+      setDrawerOpen(false);
+      return;
+    }
+    const session = ++sessionRef.current;
+    setActiveId(id);
+    setMessages([]);
+    setTyping(false);
+    setDrawerOpen(false);
+    setLoadingChat(true);
+    setSidebarError(null);
+    try {
+      const convo = await ai.conversation(id);
+      if (session !== sessionRef.current) return;
+      setMessages(
+        convo.messages.map((m) => ({
+          id: localId(),
+          serverId: m.id,
+          role: m.role,
+          content: m.content,
+          time: time(m.created_at),
+        }))
+      );
+    } catch (err) {
+      if (session !== sessionRef.current) return;
+      setSidebarError(err instanceof Error ? err.message : "Couldn't open that conversation.");
+      setActiveId(null);
+    } finally {
+      if (session === sessionRef.current) setLoadingChat(false);
+    }
+  }
+
+  async function handleDeleteChat(id: string) {
+    if (!window.confirm("Delete this conversation?")) return;
+    const prev = conversations.data;
+    conversations.setData((p) => (p ? { ...p, items: p.items.filter((c) => c.id !== id), total: p.total - 1 } : p!));
+    if (id === activeId) handleNewChat();
+    try {
+      await ai.removeConversation(id);
+    } catch (err) {
+      if (prev) conversations.setData(prev);
+      setSidebarError(err instanceof Error ? err.message : "Couldn't delete that conversation.");
+    }
+  }
+
+  const sidebarProps = {
+    history,
+    activeId,
+    searchQuery: searchQ,
+    onSearchChange: setSearchQ,
+    onSelectChat: (id: string) => void handleSelectChat(id),
+    onDeleteChat: (id: string) => void handleDeleteChat(id),
+    onNewChat: handleNewChat,
+    status: sidebarStatus,
+  };
+
+  const hasMessages = messages.length > 0 || loadingChat;
+  const ctx = context.data;
+
   return (
-    /**
-     * Negative-margin escape hatch:
-     *   • On mobile  (below lg): DashboardLayout main has pt-16 pb-24.
-     *     We undo that so our chat fills from just below the fixed header
-     *     to just above the fixed bottom nav.
-     *   • On desktop (lg+):      main has pt-8 px-8 pb-12.
-     *     We undo those so our chat fills the entire flex-1 column.
-     *
-     * Then we use `h-[calc(...)]` to get the correct explicit height so
-     * inner flex children can stretch to fill it without overflow.
-     */
     <div
       className="
-        /* ── Mobile escape (below lg) ── */
         -mt-16 -mb-24
         h-[calc(100dvh-64px-64px)]
-
-        /* ── Desktop escape (lg+) ── */
         lg:-mt-8 lg:-mb-12 lg:-mx-8
         lg:h-[calc(100dvh-80px)]
-
-        flex overflow-hidden bg-[#FAFAF8]
+        flex overflow-hidden bg-[#FAFAF8] relative
       "
     >
-      {/* ══ CHAT HISTORY SIDEBAR — desktop ═══════════════════════════════════
-          This is a *secondary* sidebar for chat history only.
-          It is NOT the app nav sidebar (that lives in layout.tsx).
-          Visible at lg+, togglable via historyOpen flag.
-      ════════════════════════════════════════════════════════════════════════ */}
+      {/* Chat history sidebar — desktop */}
       <aside
-        className={`
-          hidden lg:flex flex-col
-          border-r border-[#E8E8E4] bg-white
-          transition-all duration-200 overflow-hidden
-          ${historyOpen ? "w-64 min-w-[256px]" : "w-0 min-w-0"}
-        `}
+        className={`hidden lg:flex flex-col border-r border-[#E8E8E4] bg-white transition-all duration-200 overflow-hidden ${
+          historyOpen ? "w-64 min-w-[256px]" : "w-0 min-w-0"
+        }`}
       >
-        {historyOpen && (
-          <ChatSidebar
-            history={HISTORY}
-            activeId={activeChat}
-            searchQuery={searchQ}
-            onSearchChange={setSearchQ}
-            onSelectChat={(id) => { setActiveChat(id); setMessages(SEED_MESSAGES); }}
-            onNewChat={handleNewChat}
-          />
-        )}
+        {historyOpen && <ChatSidebar {...sidebarProps} />}
       </aside>
 
-      {/* ══ CHAT MAIN COLUMN ═════════════════════════════════════════════════ */}
+      {/* Chat main column */}
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
-
-        {/* ── Chat topbar ─────────────────────────────────────────────────── */}
         <div className="flex-shrink-0 flex items-center gap-3 px-4 lg:px-6 h-14 border-b border-[#E8E8E4] bg-white">
-          {/* Mobile: open drawer */}
           <button
             className="lg:hidden p-1.5 -ml-1 text-[#A0AEC0] hover:text-[#4A5568] transition-colors"
             onClick={() => setDrawerOpen(true)}
@@ -243,115 +244,73 @@ export default function AIAssistantPage() {
           >
             <PanelLeftOpen className="w-5 h-5" />
           </button>
-
-          {/* Desktop: toggle history sidebar */}
           <button
             className="hidden lg:flex p-1.5 -ml-1 text-[#A0AEC0] hover:text-[#4A5568] transition-colors"
             onClick={() => setHistoryOpen((v) => !v)}
             aria-label={historyOpen ? "Collapse chat history" : "Expand chat history"}
           >
-            {historyOpen ? (
-              <PanelLeftClose className="w-5 h-5" />
-            ) : (
-              <PanelLeftOpen className="w-5 h-5" />
-            )}
+            {historyOpen ? <PanelLeftClose className="w-5 h-5" /> : <PanelLeftOpen className="w-5 h-5" />}
           </button>
 
-          {/* AI identity */}
           <div className="flex items-center gap-2.5 flex-1 min-w-0">
-            <div className="relative flex-shrink-0">
-              <div className="w-8 h-8 rounded-full bg-[#FFF0E6] border border-[#F4C9A4] flex items-center justify-center">
-                <Bot className="w-4 h-4 text-[#E85D04]" />
-              </div>
-              {/* Online dot */}
-              <span className="absolute bottom-0 right-0 w-2.5 h-2.5 bg-green-400 border-2 border-white rounded-full" />
+            <div className="w-8 h-8 rounded-full bg-[#FFF0E6] border border-[#F4C9A4] flex items-center justify-center flex-shrink-0">
+              <Bot className="w-4 h-4 text-[#E85D04]" />
             </div>
             <div className="min-w-0">
-              <p className="text-sm font-bold text-[#1A1A1A] leading-tight truncate">
-                Tenda AI Assistant
-              </p>
-              <p className="text-[10px] text-[#E85D04] font-medium">
-                Customer intelligence · Active
-              </p>
+              <p className="text-sm font-bold text-[#1A1A1A] leading-tight truncate">Tenda AI Assistant</p>
+              <p className="text-[10px] text-[#E85D04] font-medium">Customer intelligence</p>
             </div>
           </div>
 
-          {/* Context badge — desktop only */}
-          <div className="hidden lg:flex items-center gap-1.5 bg-[#FFF7F0] border border-[#F4C9A4] rounded-full px-3 py-1.5 text-xs text-[#C94E00] font-medium flex-shrink-0">
-            <Info className="w-3.5 h-3.5" />
-            Analyzing <span className="font-bold ml-0.5">1,284 customers</span>
-            <span className="text-[#F4C9A4]">·</span>
-            Last 30 days
-          </div>
+          {ctx && (
+            <div className="hidden lg:flex items-center gap-1.5 bg-[#FFF7F0] border border-[#F4C9A4] rounded-full px-3 py-1.5 text-xs text-[#C94E00] font-medium flex-shrink-0">
+              <Info className="w-3.5 h-3.5" />
+              Using <span className="font-bold">{number(ctx.total_transactions)} sales</span>
+              <span className="text-[#F4C9A4]">·</span>
+              {naira(ctx.total_revenue, { compact: true })} revenue
+            </div>
+          )}
         </div>
 
-        {/* ── Messages area ───────────────────────────────────────────────── */}
-        <div className="flex-1 overflow-y-auto">
+        <div ref={scrollRef} className="flex-1 overflow-y-auto overflow-x-hidden">
           {hasMessages ? (
             <div className="px-4 lg:px-6 py-6 space-y-5 max-w-3xl mx-auto w-full">
-              {messages.map((msg) => (
+              {loadingChat && <TypingIndicator />}
+              {messages.map((msg, i) => (
                 <MessageBubble
                   key={msg.id}
                   msg={msg}
-                  onRegenerate={msg.role === "assistant" ? handleRegenerate : undefined}
+                  onRegenerate={
+                    msg.role === "assistant" && i === messages.length - 1 && !typing ? handleRegenerate : undefined
+                  }
                 />
               ))}
               {typing && <TypingIndicator />}
-              <div ref={bottomRef} />
             </div>
           ) : (
             <EmptyState onPromptClick={sendMessage} />
           )}
         </div>
 
-        {/* ── Suggestions + Input (fixed to bottom of column) ─────────────── */}
         <div className="flex-shrink-0">
-          {hasMessages && <SuggestionsBar onSelect={sendMessage} />}
-          <PromptInput
-            value={input}
-            onChange={setInput}
-            onSend={sendMessage}
-            disabled={typing}
-          />
+          {messages.length > 0 && <SuggestionsBar onSelect={sendMessage} />}
+          <PromptInput value={input} onChange={setInput} onSend={sendMessage} disabled={typing || loadingChat} />
         </div>
       </div>
 
-      {/* ══ MOBILE DRAWER — chat history ══════════════════════════════════════
-          Sits inside the page, positioned relative to this container.
-          Uses inset-0 so it covers only the chat area, not the app nav.
-          z-10 keeps it above chat content but below the app's z-40/50 layers.
-      ════════════════════════════════════════════════════════════════════════ */}
+      {/* Mobile drawer — chat history */}
       {drawerOpen && (
         <div className="lg:hidden absolute inset-0 z-10 flex">
-          {/* Backdrop */}
-          <div
-            className="absolute inset-0 bg-black/40 backdrop-blur-sm"
-            onClick={() => setDrawerOpen(false)}
-          />
-          {/* Drawer panel */}
+          <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={() => setDrawerOpen(false)} />
           <div className="relative w-72 max-w-[80vw] bg-white h-full shadow-2xl flex flex-col z-10">
             <div className="flex items-center justify-between px-4 py-3 border-b border-[#E8E8E4]">
               <p className="text-sm font-bold text-[#1A1A1A]">Conversations</p>
-              <button
-                onClick={() => setDrawerOpen(false)}
-                className="p-1.5 text-[#A0AEC0] hover:text-[#4A5568] transition-colors"
-              >
+              <button onClick={() => setDrawerOpen(false)} className="p-1.5 text-[#A0AEC0] hover:text-[#4A5568] transition-colors" aria-label="Close">
                 <PanelLeftClose className="w-5 h-5" />
               </button>
             </div>
             <div className="flex-1 overflow-hidden">
-              <ChatSidebar
-                history={HISTORY}
-                activeId={activeChat}
-                searchQuery={searchQ}
-                onSearchChange={setSearchQ}
-                onSelectChat={(id) => {
-                  setActiveChat(id);
-                  setMessages(SEED_MESSAGES);
-                  setDrawerOpen(false);
-                }}
-                onNewChat={handleNewChat}
-              />
+              <ChatSidebar {...sidebarProps} />
             </div>
           </div>
         </div>

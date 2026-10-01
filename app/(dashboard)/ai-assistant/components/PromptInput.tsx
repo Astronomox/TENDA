@@ -76,7 +76,7 @@ export default function PromptInput({
         </button>
       </div>
       <p className="text-[10px] text-[#C0C0B8] text-center mt-2">
-        Tenda AI uses your live transaction data · Not financial advice
+        Tenda AI answers from your logged sales · Not financial advice
       </p>
     </div>
   );

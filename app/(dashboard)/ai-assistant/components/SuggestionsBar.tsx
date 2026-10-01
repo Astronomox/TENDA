@@ -8,7 +8,7 @@ const SUGGESTIONS = [
   { icon: TrendingDown,  label: "Inactive customers (2+ weeks)" },
   { icon: RefreshCw,     label: "Top repeat-purchase products" },
   { icon: DollarSign,    label: "Revenue trend this week" },
-  { icon: AlertTriangle, label: "Declining categories" },
+  { icon: AlertTriangle, label: "Declining products" },
   { icon: BarChart2,     label: "Retention insights" },
 ];
 
