@@ -88,10 +88,12 @@ export default function VoiceTranscript({
   entries,
   isListening,
 }: VoiceTranscriptProps) {
-  const bottomRef = useRef<HTMLDivElement>(null);
+  const scrollRef = useRef<HTMLDivElement>(null);
 
+  // Scroll the transcript box only, never the whole page.
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+    const el = scrollRef.current;
+    if (el) el.scrollTo({ top: el.scrollHeight, behavior: "smooth" });
   }, [entries, isListening]);
 
   if (entries.length === 0 && !isListening) return null;
@@ -101,12 +103,11 @@ export default function VoiceTranscript({
       <h2 className="text-xs font-semibold uppercase tracking-widest text-[#A0AEC0] mb-3">
         Live transcript
       </h2>
-      <div className="bg-white border border-[#E8E8E4] rounded-2xl p-4 space-y-4 max-h-72 overflow-y-auto">
+      <div ref={scrollRef} className="bg-white border border-[#E8E8E4] rounded-2xl p-4 space-y-4 max-h-72 overflow-y-auto">
         {entries.map((entry) => (
           <TranscriptMessage key={entry.id} entry={entry} />
         ))}
         {isListening && <LiveRow />}
-        <div ref={bottomRef} />
       </div>
     </section>
   );

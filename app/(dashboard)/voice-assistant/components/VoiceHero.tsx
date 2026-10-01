@@ -1,7 +1,7 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
-import { Mic, MicOff, Square, Volume2 } from "lucide-react";
+import React from "react";
+import { Mic, MicOff, Square, Volume2, VolumeX } from "lucide-react";
 import VoiceOrb from "./VoiceOrb";
 import VoiceWaveform from "./VoiceWaveform";
 import VoiceStateIndicator, { VoiceState } from "./VoiceStateIndicator";
@@ -12,24 +12,24 @@ interface VoiceHeroProps {
   onStop: () => void;
   onMute: () => void;
   isMuted: boolean;
-  isActive: boolean; // session in progress
+  isActive: boolean; // recording in progress
+  /** Seconds recorded so far. */
+  elapsed: number;
+  maxSeconds: number;
+  /** Read answers aloud. */
+  speakerOn: boolean;
+  onToggleSpeaker: () => void;
+  busy?: boolean;
 }
 
-function useTimer(running: boolean) {
-  const [seconds, setSeconds] = useState(0);
-  useEffect(() => {
-    if (!running) { setSeconds(0); return; }
-    const id = setInterval(() => setSeconds((s) => s + 1), 1000);
-    return () => clearInterval(id);
-  }, [running]);
-  const m = String(Math.floor(seconds / 60)).padStart(2, "0");
-  const s = String(seconds % 60).padStart(2, "0");
-  return `${m}:${s}`;
+function formatTimer(seconds: number) {
+  const s = Math.floor(seconds);
+  return `${String(Math.floor(s / 60)).padStart(2, "0")}:${String(s % 60).padStart(2, "0")}`;
 }
 
 const STATE_LABEL: Record<VoiceState, string> = {
-  idle:       "Tap the orb to start",
-  listening:  "Listening to you…",
+  idle:       "Tap the orb and ask about your business",
+  listening:  "Listening… tap again when you're done",
   processing: "Thinking…",
   speaking:   "Tenda is responding…",
 };
@@ -41,8 +41,13 @@ export default function VoiceHero({
   onMute,
   isMuted,
   isActive,
+  elapsed,
+  maxSeconds,
+  speakerOn,
+  onToggleSpeaker,
+  busy,
 }: VoiceHeroProps) {
-  const timer = useTimer(isActive);
+  const timer = `${formatTimer(elapsed)} / ${formatTimer(maxSeconds)}`;
 
   return (
     // No padding override — sits naturally inside layout.tsx <main>
@@ -60,9 +65,9 @@ export default function VoiceHero({
 
       {/* Orb — tappable when idle */}
       <button
-        onClick={isActive ? undefined : onStart}
-        disabled={isActive}
-        aria-label={isActive ? "Session active" : "Start voice session"}
+        onClick={isActive ? onStop : onStart}
+        disabled={busy}
+        aria-label={isActive ? "Stop and send" : "Start speaking"}
         className="focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#E85D04] focus-visible:ring-offset-4 rounded-full"
       >
         <VoiceOrb state={state} size={168} />
@@ -87,7 +92,7 @@ export default function VoiceHero({
             {/* Mute */}
             <button
               onClick={onMute}
-              aria-label={isMuted ? "Unmute" : "Mute"}
+              aria-label={isMuted ? "Resume recording" : "Pause recording"}
               className={`
                 w-12 h-12 rounded-2xl border flex items-center justify-center transition-all
                 ${isMuted
@@ -111,25 +116,31 @@ export default function VoiceHero({
               "
             >
               <Square className="w-4 h-4 fill-white" />
-              End session
+              Stop &amp; send
             </button>
 
-            {/* Speaker — placeholder */}
+            {/* Speaker — read answers aloud */}
             <button
-              aria-label="Speaker settings"
-              className="
-                w-12 h-12 rounded-2xl border border-[#E8E8E4] bg-white
-                text-[#A0AEC0] hover:border-[#E85D04] hover:text-[#E85D04]
-                flex items-center justify-center transition-all
-              "
+              onClick={onToggleSpeaker}
+              aria-label={speakerOn ? "Stop reading answers aloud" : "Read answers aloud"}
+              aria-pressed={speakerOn}
+              className={`
+                w-12 h-12 rounded-2xl border flex items-center justify-center transition-all
+                ${speakerOn
+                  ? "bg-[#FFF0E6] border-[#F4C9A4] text-[#E85D04]"
+                  : "bg-white border-[#E8E8E4] text-[#A0AEC0] hover:border-[#E85D04] hover:text-[#E85D04]"
+                }
+              `}
             >
-              <Volume2 className="w-5 h-5" />
+              {speakerOn ? <Volume2 className="w-5 h-5" /> : <VolumeX className="w-5 h-5" />}
             </button>
           </>
         ) : (
           /* Start CTA */
+          <div className="flex items-center gap-3">
           <button
             onClick={onStart}
+            disabled={busy}
             className="
               h-12 px-8 rounded-2xl
               bg-[#E85D04] hover:bg-[#FF8C42] active:bg-[#C94E00]
@@ -139,8 +150,19 @@ export default function VoiceHero({
             "
           >
             <Mic className="w-4 h-4" />
-            Start voice session
+            Ask by voice
           </button>
+          <button
+            onClick={onToggleSpeaker}
+            aria-label={speakerOn ? "Stop reading answers aloud" : "Read answers aloud"}
+            aria-pressed={speakerOn}
+            className={`w-12 h-12 rounded-2xl border flex items-center justify-center transition-all ${
+              speakerOn ? "bg-[#FFF0E6] border-[#F4C9A4] text-[#E85D04]" : "bg-white border-[#E8E8E4] text-[#A0AEC0]"
+            }`}
+          >
+            {speakerOn ? <Volume2 className="w-5 h-5" /> : <VolumeX className="w-5 h-5" />}
+          </button>
+          </div>
         )}
       </div>
     </div>

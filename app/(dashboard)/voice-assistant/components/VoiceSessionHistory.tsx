@@ -68,7 +68,7 @@ export default function VoiceSessionHistory({
       {/* Groups */}
       {Object.keys(grouped).length === 0 ? (
         <div className="text-center py-10 text-sm text-[#A0AEC0]">
-          No sessions found.
+          No voice sessions yet.
         </div>
       ) : (
         Object.entries(grouped).map(([group, items]) => (

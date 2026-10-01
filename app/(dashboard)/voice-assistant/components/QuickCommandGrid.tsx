@@ -17,7 +17,7 @@ const COMMANDS: QuickCommand[] = [
   { icon: FileText,      label: "Draft a proposal",    prompt: "Help me draft a customer proposal"          },
   { icon: Calendar,      label: "Weekly summary",      prompt: "Give me a summary of this week's business"  },
   { icon: RefreshCw,     label: "Repeat buyers",       prompt: "Which products drive repeat purchases?"     },
-  { icon: DollarSign,    label: "Revenue breakdown",   prompt: "Break down my revenue by category"          },
+  { icon: DollarSign,    label: "Revenue breakdown",   prompt: "Break down my revenue by product"          },
 ];
 
 interface QuickCommandGridProps {

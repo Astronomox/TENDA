@@ -1,266 +1,276 @@
 "use client";
 
 /**
- * app/(dashboard)/voice-assistant/page.tsx
- *
- * Wired to POST /voice/ask on the Tenda FastAPI backend.
- * Records audio via the browser MediaRecorder API, sends the blob,
- * and displays the AI text answer in the transcript.
- * The demo state-cycle animation is kept for the orb/waveform visuals.
+ * Voice Assistant — POST /voice/ask (spoken questions), POST /ai/chat (quick
+ * commands), session history from /voice/sessions (BACKEND_README.md §11).
+ * Answers are read aloud with the browser's speech synthesis when enabled.
  */
 
-import React, { useState, useCallback, useRef } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import VoiceHero from "./components/VoiceHero";
 import VoiceTranscript, { TranscriptEntry } from "./components/VoiceTranscript";
 import QuickCommandGrid from "./components/QuickCommandGrid";
-import VoiceSummaryCard, { VoiceSummary } from "./components/VoiceSummaryCard";
 import VoiceSessionHistory, { VoiceSession } from "./components/VoiceSessionHistory";
 import { VoiceState } from "./components/VoiceStateIndicator";
-import { voiceAsk } from "@/lib/apiClient";
+import { ai, ApiError, voice } from "@/lib/api";
+import { useResource } from "@/lib/hooks";
+import { date, dayGroup, duration, time } from "@/lib/format";
+import { MAX_RECORDING_SEC, useRecorder } from "@/lib/useRecorder";
+import { toPlainText } from "@/components/RichText";
+import { ErrorState } from "@/components/ui";
 
-// ─── Seed session history ─────────────────────────────────────────────────────
-const SEED_SESSIONS: VoiceSession[] = [
-  {
-    id: "s1",
-    title: "Monthly sales analysis",
-    duration: "4:32",
-    date: "Today, 10:41 AM",
-    dateGroup: "Today",
-    messageCount: 8,
-    preview: "Analyzed revenue trends and at-risk customer segments",
-  },
-  {
-    id: "s2",
-    title: "Customer retention review",
-    duration: "3:18",
-    date: "Today, 9:15 AM",
-    dateGroup: "Today",
-    messageCount: 6,
-    preview: "Discussed churn prevention strategies for June",
-  },
-  {
-    id: "s3",
-    title: "Product performance deep dive",
-    duration: "6:04",
-    date: "Yesterday, 3:22 PM",
-    dateGroup: "Yesterday",
-    messageCount: 12,
-    preview: "Food & Beverage repeat rate analysis and Electronics decline",
-  },
-  {
-    id: "s4",
-    title: "Weekly business summary",
-    duration: "2:45",
-    date: "Yesterday, 9:00 AM",
-    dateGroup: "Yesterday",
-    messageCount: 5,
-    preview: "High-level weekly performance overview",
-  },
-  {
-    id: "s5",
-    title: "Friday promo planning",
-    duration: "5:10",
-    date: "Jun 10",
-    dateGroup: "Earlier",
-    messageCount: 9,
-    preview: "Discussed flash sale strategy and timing optimisation",
-  },
-];
+const SPEAKER_KEY = "tenda_voice_speaker";
 
-// ─── Page ─────────────────────────────────────────────────────────────────────
+let seq = 0;
+const entryId = (p: string) => `${p}-${Date.now()}-${++seq}`;
+
+function readSpeakerPref(): boolean {
+  try {
+    return window.localStorage.getItem(SPEAKER_KEY) !== "off";
+  } catch {
+    return true;
+  }
+}
+
 export default function VoiceAssistantPage() {
-  const [voiceState, setVoiceState] = useState<VoiceState>("idle");
-  const [isActive, setIsActive] = useState(false);
-  const [isMuted, setIsMuted] = useState(false);
+  const rec = useRecorder();
+  const [busy, setBusy] = useState<"processing" | "speaking" | null>(null);
   const [transcript, setTranscript] = useState<TranscriptEntry[]>([]);
-  const [showSummary, setShowSummary] = useState(false);
-  const [sessions, setSessions] = useState<VoiceSession[]>(SEED_SESSIONS);
-  const [activeSessionId, setActiveSessionId] = useState<string>("s1");
+  const [sessionId, setSessionId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [speakerOn, setSpeakerOn] = useState(true);
+  const sessions = useResource("voice:sessions", () => voice.sessions({ limit: 50 }));
+  const runRef = useRef(0);
 
-  // MediaRecorder refs
-  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
-  const audioChunksRef = useRef<Blob[]>([]);
-
-  const addTranscriptEntry = (entry: TranscriptEntry) =>
-    setTranscript((prev) => [...prev, entry]);
-
-  // ── Start: open mic and begin recording ──────────────────────────────────
-  const handleStart = useCallback(async () => {
-    setError(null);
-    setTranscript([]);
-    setShowSummary(false);
-
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      const recorder = new MediaRecorder(stream);
-      audioChunksRef.current = [];
-
-      recorder.ondataavailable = (e) => {
-        if (e.data.size > 0) audioChunksRef.current.push(e.data);
-      };
-
-      mediaRecorderRef.current = recorder;
-      recorder.start();
-      setIsActive(true);
-      setVoiceState("listening");
-    } catch {
-      setError("Microphone access denied. Please allow microphone access and try again.");
-    }
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- read a browser-only preference after mount
+    setSpeakerOn(readSpeakerPref());
+    return () => {
+      if (typeof window !== "undefined") window.speechSynthesis?.cancel();
+    };
   }, []);
 
-  // ── Stop: send audio to backend, display answer ──────────────────────────
-  const handleStop = useCallback(async () => {
-    const recorder = mediaRecorderRef.current;
-    if (!recorder) return;
+  const voiceState: VoiceState =
+    rec.state !== "idle" ? "listening" : busy === "processing" ? "processing" : busy === "speaking" ? "speaking" : "idle";
 
-    setVoiceState("processing");
+  const add = (entry: TranscriptEntry) => setTranscript((prev) => [...prev, entry]);
 
-    // Wrap recorder.stop() in a promise so we wait for all data
-    await new Promise<void>((resolve) => {
-      recorder.onstop = () => resolve();
-      recorder.stop();
-      // Stop all tracks to release mic
-      recorder.stream.getTracks().forEach((t) => t.stop());
+  /** Read an answer aloud; resolves when finished (or immediately if off/unsupported). */
+  const speak = useCallback(
+    (text: string) =>
+      new Promise<void>((resolve) => {
+        const synth = typeof window !== "undefined" ? window.speechSynthesis : undefined;
+        if (!speakerOn || !synth || typeof SpeechSynthesisUtterance === "undefined") return resolve();
+        synth.cancel();
+        const u = new SpeechSynthesisUtterance(toPlainText(text).replace(/₦/g, "naira "));
+        u.lang = "en-NG";
+        u.rate = 1;
+        u.onend = () => resolve();
+        u.onerror = () => resolve();
+        setBusy("speaking");
+        synth.speak(u);
+      }),
+    [speakerOn]
+  );
+
+  function toggleSpeaker() {
+    setSpeakerOn((on) => {
+      const next = !on;
+      try {
+        window.localStorage.setItem(SPEAKER_KEY, next ? "on" : "off");
+      } catch {}
+      if (!next) window.speechSynthesis?.cancel();
+      return next;
     });
+  }
 
-    setIsActive(false);
-
-    const audioBlob = new Blob(audioChunksRef.current, { type: "audio/webm" });
-
-    // Add a placeholder user entry while we wait
-    const userEntry: TranscriptEntry = {
-      id: `user-${Date.now()}`,
-      role: "user",
-      text: "Voice message sent…",
-      time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
-    };
-    addTranscriptEntry(userEntry);
-
-    try {
-      setVoiceState("speaking");
-      const res = await voiceAsk(audioBlob);
-
-      const aiEntry: TranscriptEntry = {
-        id: `ai-${Date.now()}`,
-        role: "assistant",
-        text: res.answer,
-        time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
-      };
-      addTranscriptEntry(aiEntry);
-      setShowSummary(true);
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : "Voice processing failed";
-      setError(msg);
-    } finally {
-      setVoiceState("idle");
-    }
-  }, []);
-
-  // ── Quick command: use text-based AI chat instead of audio ───────────────
-  const handleQuickCommand = useCallback(async (prompt: string) => {
+  async function handleStart() {
     setError(null);
-    setTranscript([]);
-    setShowSummary(false);
+    window.speechSynthesis?.cancel();
+    setBusy(null);
+    await rec.start();
+  }
 
-    const userEntry: TranscriptEntry = {
-      id: `user-${Date.now()}`,
-      role: "user",
-      text: prompt,
-      time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
-    };
-    addTranscriptEntry(userEntry);
-    setVoiceState("processing");
-
-    try {
-      // Quick commands use the text AI endpoint (no audio needed)
-      const { aiChat } = await import("@/lib/apiClient");
-      const res = await aiChat(prompt, []);
-
-      const aiEntry: TranscriptEntry = {
-        id: `ai-${Date.now()}`,
-        role: "assistant",
-        text: res.answer,
-        time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
-      };
-      addTranscriptEntry(aiEntry);
-      setShowSummary(true);
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : "Something went wrong";
-      setError(msg);
-    } finally {
-      setVoiceState("idle");
+  async function handleStop() {
+    const recording = await rec.stop();
+    if (!recording || recording.durationSec < 0.5) {
+      setError("That was too short. Tap the orb, ask your question, then tap again to send.");
+      return;
     }
-  }, []);
+    const run = ++runRef.current;
+    const at = new Date().toISOString();
+    const placeholderId = entryId("user");
+    add({ id: placeholderId, role: "user", text: `Voice question (${duration(recording.durationSec)})`, time: time(at) });
+    setBusy("processing");
+    try {
+      const res = await voice.ask(recording.blob, sessionId);
+      if (run !== runRef.current) return;
+      if (res.question) {
+        setTranscript((prev) => prev.map((e) => (e.id === placeholderId ? { ...e, text: res.question! } : e)));
+      }
+      add({ id: entryId("ai"), role: "assistant", text: res.answer, time: time(res.created_at ?? new Date().toISOString()) });
+      if (res.session_id) {
+        if (res.session_id !== sessionId) setSessionId(res.session_id);
+        void sessions.reload();
+      }
+      await speak(res.answer);
+    } catch (err) {
+      if (run !== runRef.current) return;
+      setTranscript((prev) => prev.filter((e) => e.id !== placeholderId));
+      setError(
+        err instanceof ApiError && err.code === "NO_SPEECH"
+          ? "I couldn't hear anything. Please try again a little closer to the microphone."
+          : err instanceof Error
+            ? err.message
+            : "Voice processing failed."
+      );
+    } finally {
+      if (run === runRef.current) setBusy(null);
+    }
+  }
 
-  // Build a summary from the last transcript pair
-  const liveSummary: VoiceSummary | null =
-    showSummary && transcript.length >= 2
-      ? {
-          summary: transcript.find((e) => e.role === "assistant")?.text ?? "",
-          takeaways: [],
-          tasks: [],
-          recommendations: [],
-          nextActions: ["Review AI Insights page for detailed breakdown"],
-        }
+  async function handleQuickCommand(prompt: string) {
+    setError(null);
+    window.speechSynthesis?.cancel();
+    const run = ++runRef.current;
+    add({ id: entryId("user"), role: "user", text: prompt, time: time(new Date().toISOString()) });
+    setBusy("processing");
+    try {
+      const res = await ai.chat({ question: prompt });
+      if (run !== runRef.current) return;
+      add({ id: entryId("ai"), role: "assistant", text: toPlainText(res.answer), time: time(new Date().toISOString()) });
+      await speak(res.answer);
+    } catch (err) {
+      if (run !== runRef.current) return;
+      setError(err instanceof Error ? err.message : "Something went wrong.");
+    } finally {
+      if (run === runRef.current) setBusy(null);
+    }
+  }
+
+  async function openSession(id: string, readAloud = false) {
+    setError(null);
+    window.speechSynthesis?.cancel();
+    const run = ++runRef.current;
+    setBusy("processing");
+    try {
+      const s = await voice.session(id);
+      if (run !== runRef.current) return;
+      setSessionId(s.id);
+      const entries = s.turns.map((t, i) => ({
+        id: `${s.id}-${i}`,
+        role: t.role,
+        text: t.text,
+        time: time(t.created_at),
+      }));
+      setTranscript(entries);
+      const lastAnswer = [...entries].reverse().find((e) => e.role === "assistant");
+      if (readAloud && lastAnswer) await speak(lastAnswer.text);
+    } catch (err) {
+      if (run !== runRef.current) return;
+      setError(err instanceof Error ? err.message : "Couldn't open that session.");
+    } finally {
+      if (run === runRef.current) setBusy(null);
+    }
+  }
+
+  async function deleteSession(id: string) {
+    if (!window.confirm("Delete this voice session?")) return;
+    const prev = sessions.data;
+    sessions.setData((p) => (p ? { ...p, items: p.items.filter((s) => s.id !== id), total: p.total - 1 } : p!));
+    if (id === sessionId) {
+      setSessionId(null);
+      setTranscript([]);
+    }
+    try {
+      await voice.removeSession(id);
+    } catch (err) {
+      if (prev) sessions.setData(prev);
+      setError(err instanceof Error ? err.message : "Couldn't delete that session.");
+    }
+  }
+
+  function newSession() {
+    runRef.current++;
+    window.speechSynthesis?.cancel();
+    setBusy(null);
+    setSessionId(null);
+    setTranscript([]);
+    setError(null);
+  }
+
+  const sessionList: VoiceSession[] =
+    sessions.data?.items.map((s) => ({
+      id: s.id,
+      title: s.title,
+      duration: duration(s.duration_sec),
+      date: date(s.created_at, "short") + ", " + time(s.created_at),
+      dateGroup: dayGroup(s.created_at),
+      messageCount: s.turn_count,
+      preview: s.preview,
+    })) ?? [];
+
+  const historyNote = sessions.notImplemented
+    ? "Saved voice sessions aren't available yet. Your conversation stays here until you leave the page."
+    : sessions.error && !sessions.data
+      ? sessions.error.message
       : null;
 
-  const handleDeleteSession = useCallback((id: string) => {
-    setSessions((prev) => prev.filter((s) => s.id !== id));
-  }, []);
+  const shownError = error ?? rec.error;
 
   return (
     <div className="px-4 lg:px-0">
       <div className="lg:grid lg:grid-cols-[1fr_300px] lg:gap-6 lg:items-start">
-
-        {/* ── LEFT / MAIN COLUMN ──────────────────────────────────────────── */}
         <div>
           <VoiceHero
             state={voiceState}
-            isActive={isActive}
-            isMuted={isMuted}
-            onStart={handleStart}
-            onStop={handleStop}
-            onMute={() => setIsMuted((v) => !v)}
+            isActive={rec.state !== "idle"}
+            isMuted={rec.state === "paused"}
+            elapsed={rec.elapsed}
+            maxSeconds={MAX_RECORDING_SEC}
+            onStart={() => void handleStart()}
+            onStop={() => void handleStop()}
+            onMute={rec.togglePause}
+            speakerOn={speakerOn}
+            onToggleSpeaker={toggleSpeaker}
+            busy={busy === "processing"}
           />
 
           <div className="border-t border-[#F0F0EC] mb-6" />
 
-          {error && (
-            <div className="mb-4 text-xs text-red-500 bg-red-50 border border-red-200 rounded-xl px-4 py-3">
-              {error}
+          {shownError && (
+            <div className="mb-4">
+              <ErrorState error={shownError} compact />
             </div>
           )}
 
-          {liveSummary && (
-            <VoiceSummaryCard
-              summary={liveSummary}
-              sessionDate={new Date().toLocaleString([], {
-                dateStyle: "medium",
-                timeStyle: "short",
-              })}
-            />
+          {transcript.length > 0 && (
+            <div className="flex justify-end mb-2">
+              <button onClick={newSession} className="text-xs font-semibold text-[#E85D04] hover:underline">
+                Start a new session
+              </button>
+            </div>
           )}
 
-          <VoiceTranscript
-            entries={transcript}
-            isListening={voiceState === "listening"}
-          />
+          <VoiceTranscript entries={transcript} isListening={rec.state === "recording"} />
 
-          <QuickCommandGrid onSelect={handleQuickCommand} disabled={isActive} />
+          <QuickCommandGrid onSelect={(p) => void handleQuickCommand(p)} disabled={rec.state !== "idle" || busy === "processing"} />
         </div>
 
-        {/* ── RIGHT / SESSION HISTORY COLUMN ──────────────────────────────── */}
         <div className="lg:sticky lg:top-4">
+          {historyNote && (
+            <p className="text-xs text-[#A0AEC0] bg-white border border-dashed border-[#E8E8E4] rounded-xl px-3 py-2 mb-3 leading-relaxed">
+              {historyNote}
+            </p>
+          )}
           <VoiceSessionHistory
-            sessions={sessions}
-            activeId={activeSessionId}
-            onReplay={(id) => setActiveSessionId(id)}
-            onDelete={handleDeleteSession}
-            onSelect={(id) => setActiveSessionId(id)}
+            sessions={sessionList}
+            activeId={sessionId ?? undefined}
+            onReplay={(id) => void openSession(id, true)}
+            onDelete={(id) => void deleteSession(id)}
+            onSelect={(id) => void openSession(id)}
           />
         </div>
-
       </div>
     </div>
   );
