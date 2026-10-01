@@ -1,5 +1,121 @@
-import { login } from "@/lib/actions/auth";
+"use client";
+
+import React, { Suspense, useEffect, useState } from "react";
 import Link from "next/link";
+import { useRouter, useSearchParams } from "next/navigation";
+import { auth, warmUp } from "@/lib/api";
+import { getToken, safeNext } from "@/lib/auth";
+import { Spinner } from "@/components/ui";
+
+function LoginForm() {
+  const router = useRouter();
+  const params = useSearchParams();
+  const next = safeNext(params.get("next"));
+  const expired = params.get("expired") === "1";
+
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    warmUp();
+    if (getToken()) router.replace(next);
+  }, [router, next]);
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!email.trim() || !password) {
+      setError("Enter your email and password.");
+      return;
+    }
+    setLoading(true);
+    setError("");
+    try {
+      await auth.login(email, password);
+      router.replace(next);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not sign in.");
+      setLoading(false);
+    }
+  }
+
+  return (
+    <div className="w-full max-w-sm">
+      <h1 className="font-display text-4xl text-[#1A1A1A] mb-2 leading-tight">Welcome back</h1>
+      <p className="text-[#4A5568] text-sm mb-8">Sign in to your account to continue</p>
+
+      {expired && !error && (
+        <div className="bg-[#FFF7F0] border border-[#F4C9A4] text-[#C94E00] text-sm rounded-xl px-4 py-3 mb-5">
+          Your session ended. Please sign in again.
+        </div>
+      )}
+      {error && (
+        <div role="alert" className="bg-red-50 border border-red-200 text-red-600 text-sm rounded-xl px-4 py-3 mb-5">
+          {error}
+        </div>
+      )}
+
+      <form onSubmit={handleSubmit} className="flex flex-col gap-5" noValidate>
+        <div>
+          <label htmlFor="email" className="text-sm font-medium text-[#4A5568] mb-1.5 block">Email address</label>
+          <input
+            id="email"
+            type="email"
+            autoComplete="email"
+            inputMode="email"
+            placeholder="you@example.com"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            className="w-full h-12 bg-white border border-[#E8E8E4] rounded-xl px-4 text-[#1A1A1A] placeholder:text-[#A0AEC0] focus:outline-none focus:border-[#E85D04] focus:ring-2 focus:ring-[#E85D04]/10 transition"
+          />
+        </div>
+
+        <div>
+          <label htmlFor="password" className="text-sm font-medium text-[#4A5568] mb-1.5 block">Password</label>
+          <input
+            id="password"
+            type="password"
+            autoComplete="current-password"
+            placeholder="••••••••"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            className="w-full h-12 bg-white border border-[#E8E8E4] rounded-xl px-4 text-[#1A1A1A] placeholder:text-[#A0AEC0] focus:outline-none focus:border-[#E85D04] focus:ring-2 focus:ring-[#E85D04]/10 transition"
+          />
+        </div>
+
+        <button
+          type="submit"
+          disabled={loading}
+          className="mt-1 bg-[#E85D04] hover:bg-[#FF8C42] active:scale-95 disabled:opacity-60 text-white font-semibold rounded-xl h-14 w-full transition-all shadow-[0_4px_20px_rgba(232,93,4,0.25)] text-base flex items-center justify-center gap-2"
+        >
+          {loading ? (
+            <>
+              <Spinner /> Signing in…
+            </>
+          ) : (
+            "Sign in →"
+          )}
+        </button>
+        {loading && (
+          <p className="text-xs text-[#A0AEC0] text-center -mt-2">
+            The first sign-in of the day can take up to a minute while the server wakes up.
+          </p>
+        )}
+      </form>
+
+      <p className="text-sm text-[#4A5568] text-center mt-8">
+        Don&apos;t have an account?{" "}
+        <Link
+          href={next !== "/dashboard" ? `/signup?next=${encodeURIComponent(next)}` : "/signup"}
+          className="font-semibold text-[#E85D04] hover:underline"
+        >
+          Create one free
+        </Link>
+      </p>
+    </div>
+  );
+}
 
 export default function LoginPage() {
   return (
@@ -14,24 +130,19 @@ export default function LoginPage() {
           backgroundPosition: "center",
         }}
       >
-        {/* Dark warm overlay */}
         <div
           className="absolute inset-0"
           style={{
             background: "linear-gradient(160deg, rgba(26,10,0,0.82) 0%, rgba(232,93,4,0.55) 60%, rgba(26,10,0,0.90) 100%)",
           }}
         />
-
-        {/* Floating glow blobs */}
         <div className="absolute top-1/3 left-1/2 -translate-x-1/2 w-96 h-96 rounded-full opacity-20"
           style={{ background: "radial-gradient(circle, #FF8C42, transparent)", filter: "blur(80px)" }} />
 
-        {/* Logo */}
         <div className="relative z-10">
           <span className="font-display text-3xl text-white">TENDA</span>
         </div>
 
-        {/* Main message */}
         <div className="relative z-10">
           <h2 className="font-display text-5xl text-white leading-tight mb-6">
             Know your<br />
@@ -41,88 +152,24 @@ export default function LoginPage() {
           <p className="text-white/60 text-base leading-relaxed max-w-xs">
             Track every sale, every customer, every naira, and know exactly who to reach out to next.
           </p>
-
-          <div className="flex gap-8 mt-10 pt-10 border-t border-white/10">
-            {[
-              { num: "2x", label: "More repeat buyers" },
-              { num: "₦0", label: "To get started" },
-              { num: "5min", label: "Setup time" },
-            ].map((s) => (
-              <div key={s.label}>
-                <p className="font-mono font-bold text-2xl text-white">{s.num}</p>
-                <p className="text-white/40 text-xs mt-1">{s.label}</p>
-              </div>
-            ))}
-          </div>
         </div>
 
-        {/* Bottom testimonial */}
         <div className="relative z-10">
-          <p className="text-white/50 text-sm italic leading-relaxed">
-            &ldquo;Before Tenda, I lost customers and didn&apos;t even know it. Now I follow up before they forget me.&rdquo;
+          <p className="text-white/50 text-sm leading-relaxed">
+            Log sales by voice, see who&apos;s due to buy again, and ask TENDA AI about your business.
           </p>
-          <p className="text-white/30 text-xs mt-2">- Blessing U., Skincare Vendor, Lagos</p>
         </div>
       </div>
 
       {/* RIGHT, Form Panel */}
       <div className="w-full lg:w-1/2 flex flex-col items-center justify-center bg-[#FAFAF8] px-6 py-16 min-h-screen">
-
-        {/* Mobile logo */}
         <div className="lg:hidden mb-10 text-center">
           <span className="font-display text-4xl text-[#E85D04]">TENDA</span>
           <p className="text-sm text-[#4A5568] mt-2">Know your customers. Grow your money.</p>
         </div>
-
-        <div className="w-full max-w-sm">
-          <h1 className="font-display text-4xl text-[#1A1A1A] mb-2 leading-tight">Welcome back</h1>
-          <p className="text-[#4A5568] text-sm mb-8">Sign in to your account to continue</p>
-
-          <form action={login} className="flex flex-col gap-5">
-            <div>
-              <label className="text-sm font-medium text-[#4A5568] mb-1.5 block">Email address</label>
-              <input
-                type="email"
-                name="email"
-                placeholder="you@example.com"
-                className="w-full h-12 bg-white border border-[#E8E8E4] rounded-xl px-4 text-[#1A1A1A] placeholder:text-[#A0AEC0] focus:outline-none focus:border-[#E85D04] focus:ring-2 focus:ring-[#E85D04]/10 transition"
-              />
-            </div>
-
-            <div>
-              <div className="flex justify-between items-center mb-1.5">
-                <label className="text-sm font-medium text-[#4A5568]">Password</label>
-                <Link href="#" className="text-xs font-medium text-[#E85D04] hover:underline">Forgot password?</Link>
-              </div>
-              <input
-                type="password"
-                name="password"
-                placeholder="••••••••"
-                className="w-full h-12 bg-white border border-[#E8E8E4] rounded-xl px-4 text-[#1A1A1A] placeholder:text-[#A0AEC0] focus:outline-none focus:border-[#E85D04] focus:ring-2 focus:ring-[#E85D04]/10 transition"
-              />
-            </div>
-
-            <button
-              type="submit"
-              className="mt-1 bg-[#E85D04] hover:bg-[#FF8C42] active:scale-95 text-white font-semibold rounded-xl h-14 w-full transition-all shadow-[0_4px_20px_rgba(232,93,4,0.25)] text-base"
-            >
-              Sign in →
-            </button>
-          </form>
-
-          <div className="flex items-center gap-4 my-6">
-            <div className="flex-1 h-px bg-[#E8E8E4]" />
-            <span className="text-xs text-[#A0AEC0] font-medium">OR</span>
-            <div className="flex-1 h-px bg-[#E8E8E4]" />
-          </div>
-
-          <p className="text-sm text-[#4A5568] text-center">
-            Don&apos;t have an account?{" "}
-            <Link href="/signup" className="font-semibold text-[#E85D04] hover:underline">
-              Create one free
-            </Link>
-          </p>
-        </div>
+        <Suspense fallback={<Spinner className="w-6 h-6 text-[#E85D04]" />}>
+          <LoginForm />
+        </Suspense>
       </div>
     </div>
   );
