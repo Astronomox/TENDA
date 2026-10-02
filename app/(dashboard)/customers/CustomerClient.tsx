@@ -28,7 +28,7 @@ export default function CustomersClient() {
         <div>
           <h1 className="font-display font-extrabold text-3xl lg:text-4xl text-[#1A1A1A] leading-none tracking-tight">Customers</h1>
           {res.data && (
-            <p className="hidden lg:block text-sm text-[#4A5568] mt-2">
+            <p className="text-xs lg:text-sm text-[#4A5568] mt-1 lg:mt-2">
               {res.data.total} {q ? "matching" : "total"} customer{res.data.total === 1 ? "" : "s"}
             </p>
           )}
