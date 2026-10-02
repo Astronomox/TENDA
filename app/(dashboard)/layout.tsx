@@ -56,6 +56,9 @@ function Shell({ children }: { children: React.ReactNode }) {
 
   return (
     <div className="min-h-screen bg-[#FAFAF8] text-[#1A1A1A] font-sans lg:flex">
+      <a href="#main-content" className="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-[100] focus:rounded-xl focus:bg-white focus:px-4 focus:py-2 focus:text-sm focus:font-semibold focus:shadow">
+        Skip to content
+      </a>
 
       {/* ===== DESKTOP SIDEBAR (lg and up) ===== */}
       <aside className="hidden lg:flex lg:flex-col lg:w-64 lg:fixed lg:inset-y-0 bg-white border-r border-[#E8E8E4] z-40">
@@ -105,7 +108,7 @@ function Shell({ children }: { children: React.ReactNode }) {
           <NotificationPanel />
         </div>
 
-        <main className="pt-16 pb-24 w-full max-w-[480px] mx-auto lg:max-w-6xl lg:pt-8 lg:px-8 lg:pb-12">
+        <main id="main-content" className="pt-16 pb-24 w-full max-w-[480px] mx-auto lg:max-w-6xl lg:pt-8 lg:px-8 lg:pb-12">
           {children}
         </main>
       </div>
