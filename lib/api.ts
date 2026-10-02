@@ -56,7 +56,8 @@ export class ApiError extends Error {
     message: string,
     public status: number,
     public code: string | null = null,
-    public body: unknown = null
+    public body: unknown = null,
+    public requestId: string | null = null
   ) {
     super(message);
     this.name = "ApiError";
@@ -268,7 +269,7 @@ export async function request<T>(path: string, opts: RequestOptions = {}): Promi
       continue;
     }
 
-    throw new ApiError(messageFrom(body, res.status), res.status, code, body);
+    throw new ApiError(messageFrom(body, res.status), res.status, code, body, res.headers.get("x-request-id"));
   }
 }
 
