@@ -53,6 +53,17 @@ function Editor({
         <textarea id="tpl-body" rows={4} maxLength={1000} value={body} onChange={(e) => setBody(e.target.value)}
           placeholder="Hi {customer_first_name}! Your {product_name} should be running low…"
           className="w-full bg-white border border-[#E8E8E4] rounded-xl px-4 py-3 text-[#1A1A1A] placeholder:text-[#A0AEC0] focus:outline-none focus:border-[#E85D04] focus:ring-2 focus:ring-[#E85D04]/10 transition resize-none" />
+        {body.trim() && (
+          <p className="mt-2 rounded-lg bg-[#FAFAF8] px-3 py-2 text-xs text-[#4A5568]">
+            <span className="font-semibold">Preview: </span>
+            {body
+              .replaceAll("{customer_first_name}", "Amina")
+              .replaceAll("{customer_name}", "Amina Yusuf")
+              .replaceAll("{product_name}", "Shea Butter")
+              .replaceAll("{business_name}", "your shop")
+              .replaceAll("{days_since_last_purchase}", "21")}
+          </p>
+        )}
         <div className="flex flex-wrap gap-1.5 mt-2">
           {PLACEHOLDERS.map((p) => (
             <button key={p} type="button" onClick={() => setBody((b) => `${b}${b && !b.endsWith(" ") ? " " : ""}${p}`)}
