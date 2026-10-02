@@ -110,6 +110,7 @@ function SignupForm() {
             {showPw ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
           </button>
           </div>
+          <p className="mt-1.5 text-xs text-[#A0AEC0]">8 to 72 characters.</p>
         </div>
 
         <button
