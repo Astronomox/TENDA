@@ -291,7 +291,7 @@ export default function Dashboard() {
 
         {/* Top product */}
         {(full?.top_product || summary?.top_products?.[0]) && (
-          <div className="bg-white p-4 lg:p-6 rounded-xl lg:rounded-2xl border border-[#E8E8E4] flex items-center gap-4">
+          <Link href="/insights" className="bg-white p-4 lg:p-6 rounded-xl lg:rounded-2xl border border-[#E8E8E4] flex items-center gap-4 hover:border-[#FFD4B3] transition-all">
             <div className="p-2 bg-[#FFF0E6] text-[#E85D04] rounded-lg"><Award className="w-5 h-5" /></div>
             <div className="min-w-0">
               <p className="text-xs text-[#A0AEC0] uppercase tracking-widest font-semibold">Best seller</p>
@@ -302,7 +302,7 @@ export default function Dashboard() {
             <p className="ml-auto font-mono font-bold text-[#1A1A1A]">
               {naira(full?.top_product?.total_revenue ?? summary?.top_products[0].total_revenue)}
             </p>
-          </div>
+          </Link>
         )}
 
         <Briefing />
