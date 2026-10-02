@@ -121,3 +121,23 @@ The merchant always knows exactly who to contact and how long they have been wai
 ---
 
 Built by [Abdullahi Oriola](https://abdullahioriola.vercel.app) — Lagos, Nigeria.
+
+---
+
+## Running the frontend locally
+
+Requirements: Node 22 and npm.
+
+```bash
+npm install
+cp .env.example .env.local   # then set NEXT_PUBLIC_API_URL
+npm run dev                  # http://localhost:3000
+```
+
+| Variable | Purpose |
+|---|---|
+| `NEXT_PUBLIC_API_URL` | Base URL of the TENDA FastAPI backend (must allow this site in CORS) |
+
+Useful scripts: `npm run typecheck`, `npm run lint`, `npm run build`.
+
+The backend contract the frontend expects is documented in [BACKEND_README.md](BACKEND_README.md).
