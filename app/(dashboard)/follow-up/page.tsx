@@ -2,7 +2,7 @@
 
 import React, { useState } from "react";
 import Link from "next/link";
-import { MessageCircle, Phone, Check, AlarmClock, CalendarCheck } from "lucide-react";
+import { MessageCircle, Phone, Check, AlarmClock, CalendarCheck, RefreshCw } from "lucide-react";
 import { followUps as api } from "@/lib/api";
 import { invalidate, useResource } from "@/lib/hooks";
 import { date, relative, telUrl, whatsappUrl } from "@/lib/format";
@@ -176,9 +176,19 @@ export default function FollowUpPage() {
 
   return (
     <div className="px-4 py-6 lg:px-0 lg:py-0 space-y-6">
-      <div>
-        <h1 className="font-display font-extrabold text-3xl lg:text-4xl text-[#1A1A1A] leading-none tracking-tight">Follow-ups</h1>
-        <p className="text-sm text-[#4A5568] mt-2">Customers who usually buy again around now.</p>
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <h1 className="font-display font-extrabold text-3xl lg:text-4xl text-[#1A1A1A] leading-none tracking-tight">Follow-ups</h1>
+          <p className="text-sm text-[#4A5568] mt-2">Customers who usually buy again around now.</p>
+        </div>
+        <button
+          onClick={() => void res.reload()}
+          disabled={res.loading}
+          className="flex h-10 w-10 items-center justify-center rounded-xl border border-[#E8E8E4] bg-white text-[#4A5568] hover:border-[#E85D04] hover:text-[#E85D04] disabled:opacity-50"
+          aria-label="Refresh follow-ups"
+        >
+          <RefreshCw className={`h-4 w-4 ${res.loading ? "animate-spin" : ""}`} />
+        </button>
       </div>
 
       {actionError && <ErrorState error={actionError} compact />}
