@@ -2,8 +2,10 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Tenda",
+  metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL ?? "https://tenda-delta.vercel.app"),
+  title: { default: "TENDA", template: "%s · TENDA" },
   description: "Turn one-time buyers into loyal customers.",
+  applicationName: "TENDA",
 };
 
 export default function RootLayout({

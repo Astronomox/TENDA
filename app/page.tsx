@@ -10,7 +10,7 @@ import Faq from "@/components/landing/Faq";
 import FinalCta from "@/components/landing/FinalCta";
 
 export const metadata: Metadata = {
-  title: "TENDA · Turn one-time buyers into regulars",
+  title: { absolute: "TENDA · Turn one-time buyers into regulars" },
   description:
     "Customer intelligence for Nigerian small businesses. Log sales by voice or text, learn each customer's buying rhythm, and get told who to follow up with on WhatsApp. Free to start.",
 };
