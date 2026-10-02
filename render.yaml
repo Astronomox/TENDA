@@ -1,0 +1,35 @@
+# Render Blueprint — Dashboard → New → Blueprint → pick this repo.
+#
+# FREE setup (incubation stage):
+#   - Web service on Render's free plan (sleeps after 15 min idle; first request
+#     after that takes ~1 min). Keep it warm with a free uptime ping to /health.
+#   - Database on Neon's free Postgres (https://neon.tech) — it does not expire.
+#     Render's own free Postgres is deleted after 30 days and free web services
+#     have no persistent disk, so neither can hold real customer data.
+#
+# When you can pay: switch `plan: free` to `starter`, and either keep Neon or
+# add a Render Postgres (see SCALABILITY.md → T1-1).
+
+services:
+  - type: web
+    name: tenda-api
+    runtime: python
+    rootDir: backend        # the API lives in backend/ in this repo
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn main:app --host 0.0.0.0 --port $PORT --proxy-headers --forwarded-allow-ips="*"
+    healthCheckPath: /health
+    autoDeploy: true
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.12.3
+      - key: ENVIRONMENT
+        value: production        # refuses to start on a wipe-able SQLite file or weak secret
+      - key: DATABASE_URL
+        sync: false              # paste the Neon connection string in the dashboard, exactly as Neon shows it
+      - key: SECRET_KEY
+        generateValue: true      # Render creates a strong random value once
+      - key: GEMINI_API_KEY
+        sync: false              # optional; without it AI/voice routes return 503 AI_UNAVAILABLE
+      - key: ACCESS_TOKEN_EXPIRE_MINUTES
+        value: "60"
