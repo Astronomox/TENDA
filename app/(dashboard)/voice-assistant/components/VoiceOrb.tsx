@@ -22,8 +22,6 @@ interface VoiceOrbProps {
  * product motion language (no flashy neon, no aggressive scaling).
  */
 export default function VoiceOrb({ state, size = 160 }: VoiceOrbProps) {
-  const half = size / 2;
-
   const orbColors: Record<VoiceState, { core: string; glow: string; ring: string }> = {
     idle:       { core: "from-[#FFF0E6] to-[#F4C9A4]",  glow: "rgba(232,93,4,0.08)",  ring: "#F4C9A4" },
     listening:  { core: "from-[#FFF0E6] to-[#E85D04]",  glow: "rgba(232,93,4,0.18)",  ring: "#E85D04" },
