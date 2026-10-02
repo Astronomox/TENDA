@@ -40,6 +40,7 @@ export function useResource<T>(key: string | null, fetcher: () => Promise<T>): R
   const [loading, setLoading] = useState<boolean>(!!key);
   const fetcherRef = useRef(fetcher);
   const runRef = useRef(0);
+  const loadedAtRef = useRef(0);
 
   useEffect(() => {
     fetcherRef.current = fetcher;
@@ -54,6 +55,7 @@ export function useResource<T>(key: string | null, fetcher: () => Promise<T>): R
       const result = await fetcherRef.current();
       if (run !== runRef.current) return;
       cache.set(key, result);
+      loadedAtRef.current = Date.now();
       setDataState(result);
     } catch (err) {
       if (run !== runRef.current) return;
@@ -68,6 +70,16 @@ export function useResource<T>(key: string | null, fetcher: () => Promise<T>): R
     // eslint-disable-next-line react-hooks/set-state-in-effect -- syncing to a changed cache key
     setDataState(key ? (cache.get(key) as T | undefined) : undefined);
     void load();
+  }, [key, load]);
+
+  // Coming back to the tab after a while? Quietly fetch fresh data.
+  useEffect(() => {
+    if (!key) return;
+    const onVisible = () => {
+      if (document.visibilityState === "visible" && Date.now() - loadedAtRef.current > 60_000) void load();
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    return () => document.removeEventListener("visibilitychange", onVisible);
   }, [key, load]);
 
   const setData = useCallback(
