@@ -6,6 +6,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { auth, warmUp } from "@/lib/api";
 import { getToken, safeNext } from "@/lib/auth";
 import { Spinner } from "@/components/ui";
+import { Eye, EyeOff } from "lucide-react";
 
 function LoginForm() {
   const router = useRouter();
@@ -15,6 +16,7 @@ function LoginForm() {
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [showPw, setShowPw] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
@@ -73,15 +75,25 @@ function LoginForm() {
 
         <div>
           <label htmlFor="password" className="text-sm font-medium text-[#4A5568] mb-1.5 block">Password</label>
+          <div className="relative">
           <input
             id="password"
-            type="password"
+            type={showPw ? "text" : "password"}
             autoComplete="current-password"
             placeholder="••••••••"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             className="w-full h-12 bg-white border border-[#E8E8E4] rounded-xl px-4 text-[#1A1A1A] placeholder:text-[#A0AEC0] focus:outline-none focus:border-[#E85D04] focus:ring-2 focus:ring-[#E85D04]/10 transition"
           />
+          <button
+            type="button"
+            onClick={() => setShowPw((v) => !v)}
+            className="absolute right-2 top-1/2 -translate-y-1/2 flex h-9 w-9 items-center justify-center rounded-lg text-[#A0AEC0] hover:text-[#4A5568]"
+            aria-label={showPw ? "Hide password" : "Show password"}
+          >
+            {showPw ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+          </button>
+          </div>
         </div>
 
         <button
