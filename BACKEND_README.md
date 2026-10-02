@@ -1,5 +1,7 @@
 # TENDA Backend Contract
 
+> **Status (Oct 2026):** implemented in the TENDA API v1.4.0. All endpoints the frontend calls were verified end to end.
+
 > **What this document is:** the complete specification of what the TENDA backend
 > (`https://tenda-api.onrender.com`, FastAPI) must provide so that the TENDA
 > frontend (this repo, Next.js 16) is whole: every screen working, no placeholder
