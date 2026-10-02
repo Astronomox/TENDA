@@ -133,9 +133,6 @@ export default function Hero() {
           >
             <ProductVideo onExpand={() => setDemoOpen(true)} suspended={demoOpen} />
           </motion.div>
-          <p className="on-dark relative mt-2.5 text-center font-mono text-[10.5px] font-medium text-[#A39B92] sm:mt-5 sm:text-[11px]">
-            Real screen recording · sample data · tap a chapter to jump
-          </p>
         </div>
       </div>
 
