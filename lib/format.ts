@@ -104,8 +104,8 @@ export function firstName(name: string | null | undefined): string {
 export function phone(value: string | null | undefined): string {
   if (!value) return "";
   const digits = value.replace(/\D/g, "");
-  if (digits.startsWith("234") && digits.length === 13) {
-    const local = "0" + digits.slice(3);
+  const local = digits.startsWith("234") && digits.length === 13 ? "0" + digits.slice(3) : digits;
+  if (local.startsWith("0") && local.length === 11) {
     return `${local.slice(0, 4)} ${local.slice(4, 7)} ${local.slice(7)}`;
   }
   return value;
