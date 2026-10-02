@@ -7,8 +7,6 @@ interface VoiceWaveformProps {
   state: VoiceState;
 }
 
-const BAR_COUNT = 24;
-
 const STATE_COLOR: Record<VoiceState, string> = {
   idle:       "#E8E8E4",
   listening:  "#E85D04",
