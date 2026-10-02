@@ -7,6 +7,7 @@ import { useCurrentUser } from "@/components/AuthGate";
 import { ApiError, auth, business } from "@/lib/api";
 import { useResource } from "@/lib/hooks";
 import { date } from "@/lib/format";
+import pkg from "@/package.json";
 import { ErrorState, Notice, Spinner, inputClass } from "@/components/ui";
 
 function ChangePassword() {
@@ -139,6 +140,7 @@ export default function Settings() {
           <p className="text-xs text-[#A0AEC0] mt-3 leading-relaxed">
             The more TENDA knows about how you sell, the better its follow-up reminders and insights get.
           </p>
+          <p className="text-[11px] text-[#A0AEC0] mt-6 font-mono">TENDA web v{pkg.version}</p>
         </section>
       </div>
     </div>
