@@ -18,8 +18,9 @@ export const STATUS_BADGE: Record<CustomerStatus, { label: string; cls: string }
 
 export default function CustomersClient() {
   const [query, setQuery] = useState("");
+  const [sort, setSort] = useState("name");
   const q = useDebounced(query.trim(), 300);
-  const res = useResource(`customers:list:${q}`, () => customersApi.list({ q, limit: 200, sort: "name" }));
+  const res = useResource(`customers:list:${q}:${sort}`, () => customersApi.list({ q, limit: 200, sort }));
 
   return (
     <div className="w-full px-4 py-6 lg:px-0 lg:py-0">
@@ -39,8 +40,9 @@ export default function CustomersClient() {
         </Link>
       </div>
 
-      {/* SEARCH */}
-      <div className="relative mb-2 lg:mb-6 lg:max-w-md">
+      {/* SEARCH + SORT */}
+      <div className="mb-2 flex gap-2 lg:mb-6">
+      <div className="relative flex-1 lg:max-w-md">
         <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-[#A0AEC0]" />
         <input
           value={query}
@@ -49,6 +51,17 @@ export default function CustomersClient() {
           placeholder="Search by name, phone or email…"
           aria-label="Search customers"
         />
+      </div>
+      <select
+        value={sort}
+        onChange={(e) => setSort(e.target.value)}
+        aria-label="Sort customers"
+        className="h-12 rounded-xl border border-[#E8E8E4] bg-white px-3 text-sm text-[#1A1A1A] focus:border-[#E85D04] focus:outline-none"
+      >
+        <option value="name">A–Z</option>
+        <option value="-last_purchase_at">Recent</option>
+        <option value="-total_spent">Top spend</option>
+      </select>
       </div>
 
       <ResourceView resource={res} feature="Customers" endpoint="GET /customers" loading={<SkeletonList rows={6} />}>
