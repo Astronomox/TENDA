@@ -179,6 +179,11 @@ export default function SalesPage() {
               icon={Receipt}
               title="No sales recorded yet"
               body="Log your first sale by typing it or just saying it out loud."
+              action={
+                <Link href="/sales/add-sales" className="inline-flex items-center gap-1.5 rounded-full bg-[#E85D04] px-5 py-2.5 text-sm font-semibold text-white">
+                  Log your first sale
+                </Link>
+              }
             />
           ) : (
             <>
