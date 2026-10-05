@@ -7,6 +7,7 @@ import { Home, Users, Clock, Settings, Plus, Bot, Mic, Sparkles, LogOut } from "
 import NotificationPanel from "@/components/NotificationPanel";
 import AuthGate, { useCurrentUser } from "@/components/AuthGate";
 import Logo from "@/components/Logo";
+import { ConfirmProvider } from "@/components/ConfirmDialog";
 import { initials } from "@/lib/format";
 
 const NAV = [
@@ -22,7 +23,9 @@ const NAV = [
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   return (
     <AuthGate>
-      <Shell>{children}</Shell>
+      <ConfirmProvider>
+        <Shell>{children}</Shell>
+      </ConfirmProvider>
     </AuthGate>
   );
 }

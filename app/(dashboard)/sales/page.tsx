@@ -8,6 +8,7 @@ import { invalidate, useResource } from "@/lib/hooks";
 import { dateTime, initials, naira, number, pct } from "@/lib/format";
 import type { AnalyticsSummary, DashboardAnalytics, Sale } from "@/lib/types";
 import { EmptyState, ErrorState, PendingBackend, Skeleton, SkeletonList } from "@/components/ui";
+import { useConfirm } from "@/components/ConfirmDialog";
 
 type Overview = { kind: "full"; data: DashboardAnalytics } | { kind: "summary"; data: AnalyticsSummary };
 
@@ -67,9 +68,10 @@ export default function SalesPage() {
   const [limit, setLimit] = useState(PAGE);
   const list = useResource(`sales:list:${limit}`, () => salesApi.list({ limit, sort: "-sold_at" }));
   const [actionError, setActionError] = useState<string | null>(null);
+  const confirm = useConfirm();
 
   async function handleDelete(sale: Sale) {
-    if (!window.confirm(`Delete this sale of ${sale.product_name} (${naira(sale.amount)})? It will be removed from your totals.`)) return;
+    if (!(await confirm({ title: "Delete this sale?", message: `${sale.product_name} (${naira(sale.amount)}) will be removed from your totals.`, confirmLabel: "Delete sale" }))) return;
     setActionError(null);
     const prev = list.data;
     list.setData((p) => (p ? { ...p, items: p.items.filter((s) => s.id !== sale.id), total: p.total - 1 } : p!));

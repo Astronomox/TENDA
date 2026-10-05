@@ -7,6 +7,7 @@ import { templates as api } from "@/lib/api";
 import { useResource } from "@/lib/hooks";
 import type { MessageTemplate } from "@/lib/types";
 import { EmptyState, ErrorState, FieldLabel, ResourceView, SkeletonList, Spinner, inputClass } from "@/components/ui";
+import { useConfirm } from "@/components/ConfirmDialog";
 
 const PLACEHOLDERS = ["{customer_first_name}", "{customer_name}", "{product_name}", "{business_name}", "{days_since_last_purchase}"];
 
@@ -97,9 +98,10 @@ export default function TemplatesPage() {
   });
   const [editing, setEditing] = useState<MessageTemplate | "new" | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
+  const confirm = useConfirm();
 
   async function remove(t: MessageTemplate) {
-    if (!window.confirm(`Delete the template "${t.name}"?`)) return;
+    if (!(await confirm({ title: `Delete the template "${t.name}"?`, confirmLabel: "Delete template" }))) return;
     const prev = res.data;
     res.setData((list) => (list ?? []).filter((x) => x.id !== t.id));
     try {

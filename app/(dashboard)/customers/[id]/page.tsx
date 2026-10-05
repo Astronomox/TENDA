@@ -13,6 +13,7 @@ import EditCustomerForm from "../components/EditCustomerForm";
 import { ApiError, customers } from "@/lib/api";
 import { invalidate, useResource } from "@/lib/hooks";
 import { EmptyState, ErrorState, PendingBackend, Skeleton } from "@/components/ui";
+import { useConfirm } from "@/components/ConfirmDialog";
 
 export default function IndividualCustomer() {
   const params = useParams<{ id: string }>();
@@ -21,10 +22,11 @@ export default function IndividualCustomer() {
   const res = useResource(`customers:detail:${id}`, () => customers.get(id));
   const [editing, setEditing] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
+  const confirm = useConfirm();
 
   async function handleDelete() {
     if (!res.data) return;
-    if (!window.confirm(`Delete ${res.data.name}? Their past sales will still count in your totals.`)) return;
+    if (!(await confirm({ title: `Delete ${res.data.name}?`, message: "Their past sales will still count in your totals.", confirmLabel: "Delete customer" }))) return;
     setActionError(null);
     try {
       await customers.remove(id);

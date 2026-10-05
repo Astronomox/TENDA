@@ -22,6 +22,7 @@ import { MAX_RECORDING_SEC, useRecorder } from "@/lib/useRecorder";
 import { PcmStreamPlayer } from "@/lib/pcmPlayer";
 import { toPlainText } from "@/components/RichText";
 import { ErrorState } from "@/components/ui";
+import { useConfirm } from "@/components/ConfirmDialog";
 
 const SPEAKER_KEY = "tenda_voice_speaker";
 const MAX_SPOKEN_CHARS = 450; // the server keeps voice answers short; this is a safety net
@@ -70,6 +71,7 @@ export default function VoiceAssistantPage() {
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [speakerOn, setSpeakerOn] = useState(true);
+  const confirm = useConfirm();
   const sessions = useResource("voice:sessions", () => voice.sessions({ limit: 50 }));
   const runRef = useRef(0);
   const playerRef = useRef<PcmStreamPlayer | null>(null);
@@ -268,7 +270,7 @@ export default function VoiceAssistantPage() {
   }
 
   async function deleteSession(id: string) {
-    if (!window.confirm("Delete this voice session?")) return;
+    if (!(await confirm({ title: "Delete this voice session?", message: "The recording's transcript will be removed for good.", confirmLabel: "Delete" }))) return;
     const prev = sessions.data;
     sessions.setData((p) => (p ? { ...p, items: p.items.filter((s) => s.id !== id), total: p.total - 1 } : p!));
     if (id === sessionId) {

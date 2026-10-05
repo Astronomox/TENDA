@@ -21,6 +21,7 @@ import { ai, analytics, ApiError } from "@/lib/api";
 import { useResource } from "@/lib/hooks";
 import { naira, number, time } from "@/lib/format";
 import type { ChatTurn } from "@/lib/types";
+import { useConfirm } from "@/components/ConfirmDialog";
 
 const MAX_HISTORY_TURNS = 20;
 
@@ -45,6 +46,7 @@ export default function AIAssistantPage() {
   const [historyOpen, setHistoryOpen] = useState(true);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [sidebarError, setSidebarError] = useState<string | null>(null);
+  const confirm = useConfirm();
 
   const conversations = useResource("ai:conversations", () => ai.conversations({ limit: 50 }));
   const context = useResource("analytics:summary", () => analytics.summary());
@@ -190,7 +192,7 @@ export default function AIAssistantPage() {
   }
 
   async function handleDeleteChat(id: string) {
-    if (!window.confirm("Delete this conversation?")) return;
+    if (!(await confirm({ title: "Delete this conversation?", message: "Its messages will be removed for good.", confirmLabel: "Delete" }))) return;
     const prev = conversations.data;
     conversations.setData((p) => (p ? { ...p, items: p.items.filter((c) => c.id !== id), total: p.total - 1 } : p!));
     if (id === activeId) handleNewChat();
