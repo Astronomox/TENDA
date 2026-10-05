@@ -2,15 +2,20 @@
 
 import Link from "next/link";
 import React, { useState } from "react";
-import {
-  Wallet, Users, Clock, TrendingUp, TrendingDown, Plus, ChevronRight, ShoppingBag, Sparkles, RefreshCw, Award,
-} from "lucide-react";
+import { Award, Bot, ChevronRight, Clock, Mic, Plus, RefreshCw, ShoppingBag, Sparkles, TrendingDown, TrendingUp, Users, Wallet } from "lucide-react";
 import { useCurrentUser } from "@/components/AuthGate";
 import { analytics, ai, ApiError } from "@/lib/api";
 import { useResource } from "@/lib/hooks";
 import { firstName, initials, naira, number, pct, relative, todayLabel } from "@/lib/format";
 import type { AnalyticsSummary, DashboardAnalytics } from "@/lib/types";
 import { ErrorState, Skeleton, Spinner } from "@/components/ui";
+
+const QUICK_ACTIONS = [
+  { href: "/sales/add-sales", label: "Log sale", icon: Plus },
+  { href: "/customers/add-customer", label: "Add customer", icon: Users },
+  { href: "/ai-assistant", label: "Ask AI", icon: Bot },
+  { href: "/voice-assistant", label: "Voice", icon: Mic },
+];
 
 type DashboardData =
   | { kind: "full"; data: DashboardAnalytics }
@@ -224,6 +229,25 @@ export default function Dashboard() {
           </div>
         </div>
 
+        {/* QUICK ACTIONS — right under the revenue card so they're reachable without scrolling */}
+        <div>
+          <h3 className="sr-only">Quick actions</h3>
+          <div className="grid grid-cols-4 gap-2 lg:max-w-2xl">
+            {QUICK_ACTIONS.map(({ href, label, icon: Icon }) => (
+              <Link
+                key={href}
+                href={href}
+                className="bg-white border border-[#E8E8E4] rounded-2xl px-1 py-3 flex flex-col items-center gap-1.5 text-center hover:border-[#E85D04] hover:shadow-[0_1px_3px_rgba(0,0,0,0.06)] active:bg-[#FFF7F0] transition-all text-[#1A1A1A]"
+              >
+                <span className="w-9 h-9 rounded-xl bg-[#FFF0E6] flex items-center justify-center">
+                  <Icon className="w-5 h-5 text-[#E85D04]" />
+                </span>
+                <span className="font-semibold text-[11px] leading-tight">{label}</span>
+              </Link>
+            ))}
+          </div>
+        </div>
+
         {/* Mobile stat grid */}
         <div className="grid grid-cols-2 gap-3 lg:hidden">
           {d || failed ? (
@@ -307,22 +331,6 @@ export default function Dashboard() {
 
         <Briefing />
 
-        {/* QUICK ACTIONS */}
-        <div className="pt-1">
-          <h3 className="text-xs font-semibold text-[#A0AEC0] uppercase tracking-widest mb-3">Quick Actions</h3>
-          <div className="grid grid-cols-2 gap-3 lg:max-w-md">
-            <Link href="/sales/add-sales"
-              className="bg-white border border-[#E8E8E4] p-4 rounded-xl flex justify-center items-center gap-2 hover:border-[#E85D04] hover:shadow-[0_1px_3px_rgba(0,0,0,0.06)] transition-all text-[#1A1A1A]">
-              <Plus className="w-5 h-5 text-[#E85D04]" />
-              <span className="font-semibold text-sm">Log Sale</span>
-            </Link>
-            <Link href="/customers/add-customer"
-              className="bg-white border border-[#E8E8E4] p-4 rounded-xl flex justify-center items-center gap-2 hover:border-[#E85D04] hover:shadow-[0_1px_3px_rgba(0,0,0,0.06)] transition-all text-[#1A1A1A]">
-              <Users className="w-5 h-5 text-[#E85D04]" />
-              <span className="font-semibold text-sm">Add Customer</span>
-            </Link>
-          </div>
-        </div>
       </main>
     </div>
   );

@@ -8,6 +8,7 @@ import NotificationPanel from "@/components/NotificationPanel";
 import AuthGate, { useCurrentUser } from "@/components/AuthGate";
 import Logo from "@/components/Logo";
 import { ConfirmProvider } from "@/components/ConfirmDialog";
+import MobileNav from "@/components/MobileNav";
 import { initials } from "@/lib/format";
 
 const NAV = [
@@ -116,38 +117,13 @@ function Shell({ children }: { children: React.ReactNode }) {
           <NotificationPanel />
         </div>
 
-        <main id="main-content" className="pt-16 pb-24 w-full max-w-[480px] mx-auto lg:max-w-6xl lg:pt-8 lg:px-8 lg:pb-12">
+        <main id="main-content" className="pt-16 pb-[calc(6rem+env(safe-area-inset-bottom))] w-full max-w-[480px] mx-auto overflow-x-clip lg:overflow-x-visible lg:max-w-6xl lg:pt-8 lg:px-8 lg:pb-12">
           {children}
         </main>
       </div>
 
       {/* ===== MOBILE BOTTOM NAV (below lg) ===== */}
-      <footer className="lg:hidden fixed bottom-0 left-1/2 -translate-x-1/2 z-50 w-full max-w-[480px] bg-white border-t border-[#E8E8E4]">
-        <div className="flex justify-around items-center h-16">
-          {NAV.map((item) => {
-            const active = isActive(item.href);
-            return (
-              <Link
-                key={item.href}
-                href={item.href}
-                className="flex flex-col items-center justify-center gap-1 flex-1 h-full relative"
-              >
-                {active && (
-                  <span className="absolute top-0 h-1 w-8 rounded-b-full bg-[#E85D04]" />
-                )}
-                <item.icon
-                  className={`w-6 h-6 transition-colors ${active ? "text-[#E85D04]" : "text-[#A0AEC0]"}`}
-                />
-                <span
-                  className={`text-[10px] font-semibold transition-colors ${active ? "text-[#E85D04]" : "text-[#A0AEC0]"}`}
-                >
-                  {item.label}
-                </span>
-              </Link>
-            );
-          })}
-        </div>
-      </footer>
+      <MobileNav />
     </div>
   );
 }
