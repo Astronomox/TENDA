@@ -29,7 +29,7 @@ export default function BuiltFor() {
           <div>
             <Eyebrow>Built for how you sell</Eyebrow>
             <h2 id="built-title" className="mt-2 font-display text-[22px] font-bold leading-[1.15] tracking-[-0.035em] sm:mt-4 sm:text-[36px]">
-              Made for Nigerian shops, not Silicon Valley.
+              Made for Nigerian shops.
             </h2>
           </div>
         </Reveal>
