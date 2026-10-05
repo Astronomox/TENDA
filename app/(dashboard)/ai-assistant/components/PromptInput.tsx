@@ -60,7 +60,7 @@ export default function PromptInput({
         />
         <button
           disabled={!canSend}
-          onClick={onSend}
+          onClick={() => onSend()}
           className={`
             w-9 h-9 rounded-xl flex-shrink-0 flex items-center justify-center
             transition-all

@@ -118,7 +118,8 @@ export default function AIAssistantPage() {
   );
 
   function sendMessage(text?: string) {
-    const q = (text ?? input).trim();
+    // Only take `text` when it really is text (a click handler would pass its event).
+    const q = (typeof text === "string" ? text : input).trim();
     if (!q || typing) return;
     if (q.length > 2000) {
       setMessages((prev) => [
