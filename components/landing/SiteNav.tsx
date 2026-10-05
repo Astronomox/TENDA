@@ -4,6 +4,7 @@ import React, { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { AnimatePresence, motion, useScroll, useSpring } from "framer-motion";
 import { Menu, X } from "lucide-react";
+import Logo from "@/components/Logo";
 import { StartLink, usePrefersReducedMotion } from "./primitives";
 
 export const NAV_LINKS = [
@@ -14,11 +15,7 @@ export const NAV_LINKS = [
 ];
 
 export function Wordmark({ dark = false }: { dark?: boolean }) {
-  return (
-    <span className={`font-display text-[22px] font-extrabold tracking-[-0.04em] ${dark ? "text-white" : "text-[#1A1A1A]"}`}>
-      TENDA<span className="text-[#E85D04]">.</span>
-    </span>
-  );
+  return <Logo size="sm" tone={dark ? "light" : "dark"} priority={!dark} />;
 }
 
 export default function SiteNav() {

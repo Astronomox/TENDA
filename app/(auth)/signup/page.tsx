@@ -6,6 +6,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { auth, warmUp } from "@/lib/api";
 import { getToken, safeNext, setSessionCookie } from "@/lib/auth";
 import { Spinner } from "@/components/ui";
+import Logo from "@/components/Logo";
 import { Eye, EyeOff } from "lucide-react";
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -146,7 +147,9 @@ export default function SignupPage() {
       {/* LEFT, Form Panel */}
       <div className="w-full lg:w-1/2 flex flex-col items-center justify-center bg-[#FAFAF8] px-6 py-16 min-h-screen">
         <div className="lg:hidden mb-10 text-center">
-          <span className="font-display text-4xl text-[#E85D04]">TENDA</span>
+          <Link href="/" aria-label="TENDA home">
+            <Logo size="lg" tone="brand" />
+          </Link>
           <p className="text-sm text-[#4A5568] mt-2">Built for Nigerian merchants</p>
         </div>
         <Suspense fallback={<Spinner className="w-6 h-6 text-[#E85D04]" />}>
@@ -173,7 +176,9 @@ export default function SignupPage() {
           style={{ background: "radial-gradient(circle, #FF8C42, transparent)", filter: "blur(80px)" }} />
 
         <div className="relative z-10">
-          <span className="font-display text-3xl text-white">TENDA</span>
+          <Link href="/" aria-label="TENDA home">
+            <Logo size="lg" tone="light" priority />
+          </Link>
         </div>
 
         <div className="relative z-10">

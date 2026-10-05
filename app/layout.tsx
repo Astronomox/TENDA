@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -6,6 +6,23 @@ export const metadata: Metadata = {
   title: { default: "TENDA", template: "%s · TENDA" },
   description: "Turn one-time buyers into loyal customers.",
   applicationName: "TENDA",
+  // favicon.ico, icon.png, apple-icon.png and opengraph/twitter images in app/ are picked up automatically
+  openGraph: {
+    type: "website",
+    siteName: "TENDA",
+    title: "TENDA",
+    description: "Turn one-time buyers into loyal customers.",
+    locale: "en_NG",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "TENDA",
+    description: "Turn one-time buyers into loyal customers.",
+  },
+};
+
+export const viewport: Viewport = {
+  themeColor: "#F28334",
 };
 
 export default function RootLayout({

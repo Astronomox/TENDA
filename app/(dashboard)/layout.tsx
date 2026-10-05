@@ -6,6 +6,7 @@ import { usePathname } from "next/navigation";
 import { Home, Users, Clock, Settings, Plus, Bot, Mic, Sparkles, LogOut } from "lucide-react";
 import NotificationPanel from "@/components/NotificationPanel";
 import AuthGate, { useCurrentUser } from "@/components/AuthGate";
+import Logo from "@/components/Logo";
 import { initials } from "@/lib/format";
 
 const NAV = [
@@ -63,7 +64,9 @@ function Shell({ children }: { children: React.ReactNode }) {
       {/* ===== DESKTOP SIDEBAR (lg and up) ===== */}
       <aside className="hidden lg:flex lg:flex-col lg:w-64 lg:fixed lg:inset-y-0 bg-white border-r border-[#E8E8E4] z-40">
         <div className="h-20 flex items-center px-7 border-b border-[#E8E8E4]">
-          <span className="font-display font-extrabold text-2xl tracking-tight">TENDA</span>
+          <Link href="/dashboard" aria-label="TENDA home">
+            <Logo priority />
+          </Link>
         </div>
         <nav className="flex-1 px-4 py-6 space-y-1">
           {NAV.map((item) => {
@@ -97,7 +100,9 @@ function Shell({ children }: { children: React.ReactNode }) {
 
       {/* ===== MOBILE HEADER (below lg) ===== */}
       <header className="lg:hidden fixed top-0 left-1/2 -translate-x-1/2 z-50 w-full max-w-[480px] h-16 bg-white/95 backdrop-blur-md border-b border-[#E8E8E4] flex items-center justify-between px-4">
-        <span className="font-display font-extrabold text-2xl">TENDA</span>
+        <Link href="/dashboard" aria-label="TENDA home">
+          <Logo size="sm" />
+        </Link>
         <NotificationPanel />
       </header>
 
