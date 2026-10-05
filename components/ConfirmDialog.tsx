@@ -11,7 +11,6 @@
  */
 
 import React, { createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
-import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { AlertTriangle, HelpCircle } from "lucide-react";
 
 export interface ConfirmOptions {
@@ -61,7 +60,7 @@ export function ConfirmProvider({ children }: { children: React.ReactNode }) {
   return (
     <ConfirmContext.Provider value={confirm}>
       {children}
-      <AnimatePresence>{pending && <Dialog key="confirm" {...pending} onAnswer={answer} />}</AnimatePresence>
+      {pending && <Dialog key="confirm" {...pending} onAnswer={answer} />}
     </ConfirmContext.Provider>
   );
 }
@@ -74,7 +73,6 @@ function Dialog({
   tone = "danger",
   onAnswer,
 }: ConfirmOptions & { onAnswer: (ok: boolean) => void }) {
-  const reduce = useReducedMotion();
   const cancelRef = useRef<HTMLButtonElement>(null);
   const confirmRef = useRef<HTMLButtonElement>(null);
   const danger = tone === "danger";
@@ -109,24 +107,16 @@ function Dialog({
 
   return (
     <div className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center">
-      <motion.div
-        className="absolute inset-0 bg-[#1A0A00]/45 backdrop-blur-[2px]"
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        exit={{ opacity: 0 }}
-        transition={{ duration: reduce ? 0 : 0.15 }}
+      <div
+        className="absolute inset-0 bg-[#1A0A00]/45 backdrop-blur-[2px] animate-fade-in"
         onClick={() => onAnswer(false)}
       />
-      <motion.div
+      <div
         role="alertdialog"
         aria-modal="true"
         aria-labelledby="confirm-title"
         aria-describedby={message ? "confirm-message" : undefined}
-        className="relative w-full sm:max-w-sm bg-white rounded-t-3xl sm:rounded-2xl shadow-[0_-8px_40px_rgba(26,10,0,0.18)] sm:shadow-[0_20px_60px_rgba(26,10,0,0.25)] px-5 pt-3 pb-[max(1.25rem,env(safe-area-inset-bottom))] sm:p-6"
-        initial={reduce ? { opacity: 0 } : { opacity: 0, y: 40 }}
-        animate={{ opacity: 1, y: 0 }}
-        exit={reduce ? { opacity: 0 } : { opacity: 0, y: 40 }}
-        transition={{ type: "spring", stiffness: 420, damping: 34, duration: reduce ? 0 : undefined }}
+        className="animate-sheet-up sm:animate-rise-in relative w-full sm:max-w-sm bg-white rounded-t-3xl sm:rounded-2xl shadow-[0_-8px_40px_rgba(26,10,0,0.18)] sm:shadow-[0_20px_60px_rgba(26,10,0,0.25)] px-5 pt-3 pb-[max(1.25rem,env(safe-area-inset-bottom))] sm:p-6"
       >
         <div className="mx-auto mb-4 h-1 w-10 rounded-full bg-[#E8E8E4] sm:hidden" aria-hidden />
         <div className="flex items-start gap-3">
@@ -170,7 +160,7 @@ function Dialog({
             {confirmLabel}
           </button>
         </div>
-      </motion.div>
+      </div>
     </div>
   );
 }

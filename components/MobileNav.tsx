@@ -8,7 +8,6 @@
 import React, { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import {
   Bot, ChevronRight, Clock, FileText, Home, LayoutGrid, LogOut, Mic, Plus, Receipt, Settings, Sparkles, Users, X,
 } from "lucide-react";
@@ -81,7 +80,7 @@ export default function MobileNav() {
         </div>
       </nav>
 
-      <AnimatePresence>{open && <MoreSheet key="more" isActive={isActive} onClose={() => setOpen(false)} />}</AnimatePresence>
+      {open && <MoreSheet key="more" isActive={isActive} onClose={() => setOpen(false)} />}
     </>
   );
 }
@@ -103,7 +102,6 @@ function Tab({ href, label, icon: Icon, active }: { href: string; label: string;
 }
 
 function MoreSheet({ isActive, onClose }: { isActive: (href: string) => boolean; onClose: () => void }) {
-  const reduce = useReducedMotion();
   const { user, displayName, logout } = useCurrentUser();
 
   useEffect(() => {
@@ -119,23 +117,15 @@ function MoreSheet({ isActive, onClose }: { isActive: (href: string) => boolean;
 
   return (
     <div className="lg:hidden fixed inset-0 z-[60] flex items-end justify-center">
-      <motion.div
-        className="absolute inset-0 bg-[#1A0A00]/40"
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        exit={{ opacity: 0 }}
-        transition={{ duration: reduce ? 0 : 0.15 }}
+      <div
+        className="absolute inset-0 bg-[#1A0A00]/40 animate-fade-in"
         onClick={onClose}
       />
-      <motion.div
+      <div
         role="dialog"
         aria-modal="true"
         aria-label="More"
-        className="relative w-full max-w-[480px] bg-white rounded-t-3xl px-4 pt-3 pb-[max(1rem,env(safe-area-inset-bottom))] shadow-[0_-8px_40px_rgba(26,10,0,0.18)]"
-        initial={reduce ? { opacity: 0 } : { y: "100%" }}
-        animate={reduce ? { opacity: 1 } : { y: 0 }}
-        exit={reduce ? { opacity: 0 } : { y: "100%" }}
-        transition={{ type: "spring", stiffness: 420, damping: 38 }}
+        className="animate-sheet-up relative w-full max-w-[480px] bg-white rounded-t-3xl px-4 pt-3 pb-[max(1rem,env(safe-area-inset-bottom))] shadow-[0_-8px_40px_rgba(26,10,0,0.18)]"
       >
         <div className="mx-auto mb-3 h-1 w-10 rounded-full bg-[#E8E8E4]" aria-hidden />
         <div className="flex items-center justify-between mb-3 px-1">
@@ -185,7 +175,7 @@ function MoreSheet({ isActive, onClose }: { isActive: (href: string) => boolean;
             <LogOut className="w-4 h-4" /> Log out
           </button>
         </div>
-      </motion.div>
+      </div>
     </div>
   );
 }

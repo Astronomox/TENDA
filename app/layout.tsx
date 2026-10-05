@@ -1,5 +1,11 @@
 import type { Metadata, Viewport } from "next";
+import { JetBrains_Mono, Manrope, Sora } from "next/font/google";
 import "./globals.css";
+
+// Self-hosted at build time (no request to Google, preloaded, size-matched fallbacks so text doesn't jump).
+const manrope = Manrope({ subsets: ["latin"], weight: ["400", "500", "600", "700"], variable: "--font-manrope", display: "swap" });
+const sora = Sora({ subsets: ["latin"], weight: ["400", "500", "600", "700", "800"], variable: "--font-sora", display: "swap" });
+const jetbrains = JetBrains_Mono({ subsets: ["latin"], weight: ["500", "700"], variable: "--font-jetbrains", display: "swap" });
 
 export const metadata: Metadata = {
   metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL ?? "https://tenda-delta.vercel.app"),
@@ -29,15 +35,7 @@ export default function RootLayout({
   children,
 }: Readonly<{ children: React.ReactNode }>) {
   return (
-    <html lang="en-NG">
-      <head>
-        <link rel="preconnect" href="https://fonts.googleapis.com" />
-        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
-        <link
-          href="https://fonts.googleapis.com/css2?family=Sora:wght@400;500;600;700;800&family=Manrope:wght@400;500;600;700&family=JetBrains+Mono:wght@500;700&display=swap"
-          rel="stylesheet"
-        />
-      </head>
+    <html lang="en-NG" className={`${manrope.variable} ${sora.variable} ${jetbrains.variable}`}>
       <body className="antialiased">{children}</body>
     </html>
   );
