@@ -32,19 +32,18 @@ export default function QuickCommandGrid({ onSelect, disabled }: QuickCommandGri
         Quick commands
       </h2>
 
-      <div className="flex gap-2 overflow-x-auto pb-1 sm:pb-0 sm:grid sm:grid-cols-2 lg:grid-cols-4 scrollbar-none">
+      <div className="grid grid-cols-2 gap-2 lg:grid-cols-4">
         {COMMANDS.map((cmd) => (
           <button
             key={cmd.label}
             onClick={() => onSelect(cmd.prompt)}
             disabled={disabled}
             className="
-              flex-shrink-0 sm:flex-shrink
-              flex items-center gap-2.5 text-left
+              flex items-center gap-2.5 text-left min-h-[48px]
               bg-white border border-[#E8E8E4] rounded-xl px-3 py-2.5
               hover:border-[#E85D04] hover:bg-[#FFF7F0]
               disabled:opacity-40 disabled:cursor-not-allowed
-              transition-all group w-48 sm:w-auto
+              transition-all group min-w-0
             "
           >
             <cmd.icon className="w-4 h-4 flex-shrink-0 text-[#E85D04]" />

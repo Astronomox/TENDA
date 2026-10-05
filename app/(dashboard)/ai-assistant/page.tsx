@@ -221,8 +221,8 @@ export default function AIAssistantPage() {
   return (
     <div
       className="
-        -mt-16 -mb-24
-        h-[calc(100dvh-64px-64px)]
+        -mb-24
+        h-[calc(100dvh-64px-64px-env(safe-area-inset-bottom))]
         lg:-mt-8 lg:-mb-12 lg:-mx-8
         lg:h-[calc(100dvh-80px)]
         flex overflow-hidden bg-[#FAFAF8] relative

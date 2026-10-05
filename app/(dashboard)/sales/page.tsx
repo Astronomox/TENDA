@@ -23,6 +23,8 @@ async function loadOverview(): Promise<Overview> {
 
 const PAGE = 20;
 
+const salesCount = (n: number) => `${number(n)} ${n === 1 ? "sale" : "sales"}`;
+
 function SaleRow({ sale, onDelete }: { sale: Sale; onDelete: (s: Sale) => void }) {
   const who = sale.customer_name || "Walk-in customer";
   return (
@@ -106,9 +108,9 @@ export default function SalesPage() {
             <span className="text-[#A0AEC0]">First month of sales</span>
           ),
         },
-        { label: "This Week", value: naira(full.revenue.this_week), sub: `${number(full.transactions.this_week)} sales` },
-        { label: "Today", value: naira(full.revenue.today), sub: `${number(full.transactions.today)} sales` },
-        { label: "All Time", value: naira(full.revenue.all_time), sub: `${number(full.transactions.all_time)} sales` },
+        { label: "This Week", value: naira(full.revenue.this_week), sub: salesCount(full.transactions.this_week) },
+        { label: "Today", value: naira(full.revenue.today), sub: salesCount(full.transactions.today) },
+        { label: "All Time", value: naira(full.revenue.all_time), sub: salesCount(full.transactions.all_time) },
       ]
     : summary
       ? [
@@ -157,7 +159,7 @@ export default function SalesPage() {
       <div className="flex flex-col sm:flex-row gap-3 lg:max-w-lg">
         <Link
           href="/sales/add-sales"
-          className="flex-1 bg-[#E85D04] hover:bg-[#FF8C42] text-white font-semibold h-14 rounded-xl shadow-[0_4px_20px_rgba(232,93,4,0.25)] active:scale-95 transition-all flex items-center justify-center gap-2"
+          className="sm:flex-1 bg-[#E85D04] hover:bg-[#FF8C42] text-white font-semibold h-14 rounded-xl shadow-[0_4px_20px_rgba(232,93,4,0.25)] active:scale-95 transition-all flex items-center justify-center gap-2"
         >
           Log New Sale
           <ArrowRight className="w-4 h-4" />

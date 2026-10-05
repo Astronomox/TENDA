@@ -24,6 +24,7 @@ function FollowUpCard({
   onDone: (item: FollowUp, channel: "whatsapp" | "phone") => void;
   onSnooze: (item: FollowUp) => void;
 }) {
+  const [showMessage, setShowMessage] = useState(false);
   const overdue = item.status === "overdue";
   const accent = overdue ? "bg-[#DC2626]" : "bg-[#D97706]";
   const wa = item.whatsapp_url ?? whatsappUrl(item.customer.phone, item.suggested_message ?? undefined);
@@ -49,18 +50,22 @@ function FollowUpCard({
         <span className={`${badge.cls} text-[11px] font-semibold px-2.5 py-1 rounded-full whitespace-nowrap`}>{badge.text}</span>
       </div>
 
-      <div className="mt-3 text-xs text-[#A0AEC0] space-y-0.5 font-mono">
-        <p>Last bought: {date(item.last_purchase_at)} ({relative(item.last_purchase_at)})</p>
-        <p>Expected: {date(item.expected_at)}</p>
-      </div>
-      <p className="mt-1 text-[11px] text-[#A0AEC0]">
-        Every ~{item.interval_days} days, {SOURCE_LABEL[item.interval_source] ?? "predicted"}
+      <p
+        className="mt-2 text-xs text-[#A0AEC0] leading-relaxed"
+        title={`Every ~${item.interval_days} days, ${SOURCE_LABEL[item.interval_source] ?? "predicted"}`}
+      >
+        Bought {relative(item.last_purchase_at)} · expected {date(item.expected_at, "short")} · every ~{item.interval_days} days
       </p>
 
       {item.suggested_message && (
-        <p className="mt-3 text-xs text-[#4A5568] bg-[#FAFAF8] border border-[#F0F0EC] rounded-lg px-3 py-2 leading-relaxed">
-          {item.suggested_message}
-        </p>
+        <button
+          type="button"
+          onClick={() => setShowMessage((v) => !v)}
+          aria-expanded={showMessage}
+          className="mt-3 w-full text-left text-xs text-[#4A5568] bg-[#FAFAF8] border border-[#F0F0EC] rounded-lg px-3 py-2 leading-relaxed"
+        >
+          <span className={showMessage ? "" : "line-clamp-2"}>{item.suggested_message}</span>
+        </button>
       )}
 
       <div className="flex gap-2 mt-4">
