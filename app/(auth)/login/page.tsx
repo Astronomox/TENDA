@@ -4,7 +4,7 @@ import React, { Suspense, useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { auth, warmUp } from "@/lib/api";
-import { getToken, safeNext } from "@/lib/auth";
+import { getToken, safeNext, setSessionCookie } from "@/lib/auth";
 import { Spinner } from "@/components/ui";
 import { Eye, EyeOff } from "lucide-react";
 
@@ -22,7 +22,10 @@ function LoginForm() {
 
   useEffect(() => {
     warmUp();
-    if (getToken()) router.replace(next);
+    if (getToken()) {
+      setSessionCookie(true); // proxy.ts lets the dashboard through only with this cookie
+      router.replace(next);
+    }
   }, [router, next]);
 
   async function handleSubmit(e: React.FormEvent) {
@@ -109,11 +112,6 @@ function LoginForm() {
             "Sign in →"
           )}
         </button>
-        {loading && (
-          <p className="text-xs text-[#A0AEC0] text-center -mt-2">
-            The first sign-in of the day can take up to a minute while the server wakes up.
-          </p>
-        )}
       </form>
 
       <p className="text-sm text-[#4A5568] text-center mt-8">

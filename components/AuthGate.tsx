@@ -2,7 +2,7 @@
 
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
 import { auth as authApi, warmUp } from "@/lib/api";
-import { getClaims, redirectToLogin, useToken } from "@/lib/auth";
+import { getClaims, getToken, redirectToLogin, setSessionCookie, useToken } from "@/lib/auth";
 import { clearCache } from "@/lib/hooks";
 import type { User } from "@/lib/types";
 
@@ -52,6 +52,16 @@ export default function AuthGate({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     warmUp();
+    // The Back button can restore a page from the browser's cache without
+    // re-running this guard; check again so a signed-out user can't see it.
+    const onPageShow = (e: PageTransitionEvent) => {
+      if (e.persisted && !getToken()) {
+        document.body.style.visibility = "hidden";
+        redirectToLogin();
+      }
+    };
+    window.addEventListener("pageshow", onPageShow);
+    return () => window.removeEventListener("pageshow", onPageShow);
   }, []);
 
   useEffect(() => {
@@ -60,6 +70,7 @@ export default function AuthGate({ children }: { children: React.ReactNode }) {
       redirectToLogin(true);
       return;
     }
+    setSessionCookie(true); // keeps sessions from before the cookie existed working with proxy.ts
     // eslint-disable-next-line react-hooks/set-state-in-effect -- state is only set after the awaited fetch
     void refreshUser();
 
@@ -74,7 +85,8 @@ export default function AuthGate({ children }: { children: React.ReactNode }) {
   const logout = useCallback(async () => {
     await authApi.logout();
     clearCache();
-    window.location.assign("/login");
+    // replace(): Back from the login page must not return to the dashboard
+    window.location.replace("/login");
   }, []);
 
   const value = useMemo<CurrentUser | null>(() => {

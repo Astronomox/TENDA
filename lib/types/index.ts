@@ -171,6 +171,11 @@ export interface VoiceAskResponse {
   question?: string;
   answer: string;
   created_at?: string;
+  /** "log_sale" when the owner reported a sale; `sale` is set only if it was saved. */
+  intent?: "question" | "log_sale";
+  sale?: Sale | null;
+  draft?: SaleDraft | null;
+  missing_fields?: string[];
 }
 
 export interface SaleDraft {
