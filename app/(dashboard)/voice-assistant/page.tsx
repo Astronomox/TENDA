@@ -3,7 +3,9 @@
 /**
  * Voice Assistant — POST /voice/ask (spoken questions), POST /ai/chat (quick
  * commands), session history from /voice/sessions (BACKEND_README.md §11).
- * Answers are read aloud with the browser's speech synthesis when enabled.
+ * Answers are read aloud in a natural voice from POST /voice/speak, falling
+ * back to the browser's speech synthesis if that fails. Spoken sales are saved
+ * by /voice/ask, so the cached sales/analytics data is refreshed afterwards.
  */
 
 import React, { useCallback, useEffect, useRef, useState } from "react";
@@ -13,13 +15,41 @@ import QuickCommandGrid from "./components/QuickCommandGrid";
 import VoiceSessionHistory, { VoiceSession } from "./components/VoiceSessionHistory";
 import { VoiceState } from "./components/VoiceStateIndicator";
 import { ai, ApiError, voice } from "@/lib/api";
-import { useResource } from "@/lib/hooks";
+import { invalidate, useResource } from "@/lib/hooks";
 import { date, dayGroup, duration, time } from "@/lib/format";
 import { MAX_RECORDING_SEC, useRecorder } from "@/lib/useRecorder";
 import { toPlainText } from "@/components/RichText";
 import { ErrorState } from "@/components/ui";
 
 const SPEAKER_KEY = "tenda_voice_speaker";
+// A tiny silent clip played during a tap so mobile browsers allow audio later.
+const SILENT_WAV = "data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAQB8AAIA+AAACABAAZGF0YQAAAAA=";
+const MAX_SPOKEN_CHARS = 700;
+
+/** What gets read aloud: plain text, naira said naturally, long answers trimmed at a sentence. */
+function spokenText(text: string): string {
+  let t = toPlainText(text)
+    .replace(/^\s*[-•]\s+/gm, "")
+    .replace(/₦\s?([\d,]+(?:\.\d+)?)/g, "$1 naira")
+    .replace(/\s+/g, " ")
+    .trim();
+  if (t.length > MAX_SPOKEN_CHARS) {
+    const cut = t.slice(0, MAX_SPOKEN_CHARS);
+    const end = Math.max(cut.lastIndexOf(". "), cut.lastIndexOf("! "), cut.lastIndexOf("? "));
+    t = end > 200 ? cut.slice(0, end + 1) : cut;
+  }
+  return t;
+}
+
+/** The most natural-sounding English voice the browser has (fallback only). */
+function pickBrowserVoice(): SpeechSynthesisVoice | undefined {
+  const voices = window.speechSynthesis.getVoices().filter((v) => v.lang?.toLowerCase().startsWith("en"));
+  const score = (v: SpeechSynthesisVoice) =>
+    (/natural|neural|online/i.test(v.name) ? 4 : 0) +
+    (/google/i.test(v.name) ? 2 : 0) +
+    (/en-ng/i.test(v.lang) ? 3 : /en-(gb|us)/i.test(v.lang) ? 1 : 0);
+  return [...voices].sort((a, b) => score(b) - score(a))[0];
+}
 
 let seq = 0;
 const entryId = (p: string) => `${p}-${Date.now()}-${++seq}`;
@@ -41,13 +71,34 @@ export default function VoiceAssistantPage() {
   const [speakerOn, setSpeakerOn] = useState(true);
   const sessions = useResource("voice:sessions", () => voice.sessions({ limit: 50 }));
   const runRef = useRef(0);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+  const audioUrlRef = useRef<string | null>(null);
+  const speechAbortRef = useRef<AbortController | null>(null);
+  const finishAudioRef = useRef<(() => void) | null>(null);
+
+  /** Stop anything being fetched or spoken. */
+  const stopSpeech = useCallback(() => {
+    speechAbortRef.current?.abort();
+    speechAbortRef.current = null;
+    finishAudioRef.current?.();
+    audioRef.current?.pause();
+    if (typeof window !== "undefined") window.speechSynthesis?.cancel();
+  }, []);
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- read a browser-only preference after mount
     setSpeakerOn(readSpeakerPref());
-    return () => {
-      if (typeof window !== "undefined") window.speechSynthesis?.cancel();
-    };
+    return () => stopSpeech();
+  }, [stopSpeech]);
+
+  /** Call from a tap handler: mobile browsers only allow audio that a tap started. */
+  const unlockAudio = useCallback(() => {
+    if (typeof Audio === "undefined") return;
+    if (!audioRef.current) audioRef.current = new Audio();
+    const a = audioRef.current;
+    if (!a.paused) return;
+    a.src = SILENT_WAV;
+    a.play().catch(() => {});
   }, []);
 
   const voiceState: VoiceState =
@@ -55,22 +106,78 @@ export default function VoiceAssistantPage() {
 
   const add = (entry: TranscriptEntry) => setTranscript((prev) => [...prev, entry]);
 
-  /** Read an answer aloud; resolves when finished (or immediately if off/unsupported). */
-  const speak = useCallback(
+  /** Play a WAV; resolves "ended", "stopped" (stopSpeech) or "failed". */
+  const playAudio = useCallback(
+    (blob: Blob) =>
+      new Promise<"ended" | "stopped" | "failed">((resolve) => {
+        if (!audioRef.current) audioRef.current = new Audio();
+        const a = audioRef.current;
+        const url = URL.createObjectURL(blob);
+        audioUrlRef.current = url;
+        const done = (result: "ended" | "stopped" | "failed") => {
+          a.onended = a.onerror = null;
+          finishAudioRef.current = null;
+          if (audioUrlRef.current === url) {
+            URL.revokeObjectURL(url);
+            audioUrlRef.current = null;
+          }
+          resolve(result);
+        };
+        finishAudioRef.current = () => done("stopped");
+        a.onended = () => done("ended");
+        a.onerror = () => done("failed");
+        a.src = url;
+        setBusy("speaking");
+        a.play().catch(() => done("failed"));
+      }),
+    []
+  );
+
+  /** Fallback: the browser's built-in voice. */
+  const speakWithBrowser = useCallback(
     (text: string) =>
       new Promise<void>((resolve) => {
         const synth = typeof window !== "undefined" ? window.speechSynthesis : undefined;
-        if (!speakerOn || !synth || typeof SpeechSynthesisUtterance === "undefined") return resolve();
+        if (!synth || typeof SpeechSynthesisUtterance === "undefined") return resolve();
         synth.cancel();
-        const u = new SpeechSynthesisUtterance(toPlainText(text).replace(/₦/g, "naira "));
-        u.lang = "en-NG";
+        const u = new SpeechSynthesisUtterance(text);
+        const v = pickBrowserVoice();
+        if (v) u.voice = v;
+        u.lang = v?.lang ?? "en-NG";
         u.rate = 1;
+        u.pitch = 1.05;
         u.onend = () => resolve();
         u.onerror = () => resolve();
         setBusy("speaking");
         synth.speak(u);
       }),
-    [speakerOn]
+    []
+  );
+
+  /** Read an answer aloud in the natural voice; resolves when finished (or immediately if off). */
+  const speak = useCallback(
+    async (text: string) => {
+      if (!speakerOn) return;
+      const words = spokenText(text);
+      if (!words) return;
+      stopSpeech();
+      const ctrl = new AbortController();
+      speechAbortRef.current = ctrl;
+      let blob: Blob | null = null;
+      try {
+        blob = await voice.speak(words, ctrl.signal);
+      } catch {
+        // busy / not configured / offline: use the browser's voice instead
+      }
+      if (ctrl.signal.aborted) return;
+      speechAbortRef.current = null;
+      if (blob && blob.size > 0) {
+        const result = await playAudio(blob);
+        if (result !== "failed") return;
+      }
+      await speakWithBrowser(words);
+    },
+    [speakerOn, stopSpeech, playAudio, speakWithBrowser]
   );
 
   function toggleSpeaker() {
@@ -79,19 +186,21 @@ export default function VoiceAssistantPage() {
       try {
         window.localStorage.setItem(SPEAKER_KEY, next ? "on" : "off");
       } catch {}
-      if (!next) window.speechSynthesis?.cancel();
+      if (!next) stopSpeech();
       return next;
     });
   }
 
   async function handleStart() {
     setError(null);
-    window.speechSynthesis?.cancel();
+    unlockAudio();
+    stopSpeech();
     setBusy(null);
     await rec.start();
   }
 
   async function handleStop() {
+    unlockAudio();
     const recording = await rec.stop();
     if (!recording || recording.durationSec < 0.5) {
       setError("That was too short. Tap the orb, ask your question, then tap again to send.");
@@ -108,7 +217,17 @@ export default function VoiceAssistantPage() {
       if (res.question) {
         setTranscript((prev) => prev.map((e) => (e.id === placeholderId ? { ...e, text: res.question! } : e)));
       }
-      add({ id: entryId("ai"), role: "assistant", text: res.answer, time: time(res.created_at ?? new Date().toISOString()) });
+      const saleSaved = res.intent === "log_sale" && !!res.sale;
+      if (saleSaved) {
+        for (const prefix of ["sales:", "analytics:", "customers:", "followups:", "insights:"]) invalidate(prefix);
+      }
+      add({
+        id: entryId("ai"),
+        role: "assistant",
+        text: res.answer,
+        time: time(res.created_at ?? new Date().toISOString()),
+        link: saleSaved ? { href: "/sales", label: "View in Sales" } : undefined,
+      });
       if (res.session_id) {
         if (res.session_id !== sessionId) setSessionId(res.session_id);
         void sessions.reload();
@@ -131,7 +250,8 @@ export default function VoiceAssistantPage() {
 
   async function handleQuickCommand(prompt: string) {
     setError(null);
-    window.speechSynthesis?.cancel();
+    unlockAudio();
+    stopSpeech();
     const run = ++runRef.current;
     add({ id: entryId("user"), role: "user", text: prompt, time: time(new Date().toISOString()) });
     setBusy("processing");
@@ -150,7 +270,8 @@ export default function VoiceAssistantPage() {
 
   async function openSession(id: string, readAloud = false) {
     setError(null);
-    window.speechSynthesis?.cancel();
+    if (readAloud) unlockAudio();
+    stopSpeech();
     const run = ++runRef.current;
     setBusy("processing");
     try {
@@ -192,7 +313,7 @@ export default function VoiceAssistantPage() {
 
   function newSession() {
     runRef.current++;
-    window.speechSynthesis?.cancel();
+    stopSpeech();
     setBusy(null);
     setSessionId(null);
     setTranscript([]);

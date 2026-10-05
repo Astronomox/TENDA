@@ -126,6 +126,8 @@ interface RequestOptions {
   retries?: number;
   idempotencyKey?: string;
   signal?: AbortSignal;
+  /** Return the body as a Blob (e.g. audio) instead of parsing JSON. */
+  raw?: boolean;
 }
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
@@ -178,6 +180,7 @@ export async function request<T>(path: string, opts: RequestOptions = {}): Promi
     retries = method === "GET" ? 1 : 0,
     idempotencyKey,
     signal,
+    raw = false,
   } = opts;
 
   const url = buildUrl(path, query);
@@ -185,7 +188,7 @@ export async function request<T>(path: string, opts: RequestOptions = {}): Promi
   let refreshed = false;
 
   for (;;) {
-    const headers: Record<string, string> = { Accept: "application/json" };
+    const headers: Record<string, string> = { Accept: raw ? "*/*" : "application/json" };
     if (auth) {
       const token = getToken();
       if (!token) {
@@ -233,6 +236,7 @@ export async function request<T>(path: string, opts: RequestOptions = {}): Promi
     }
 
     if (res.status === 204) return undefined as T;
+    if (raw && res.ok) return (await res.blob()) as T;
 
     let body: unknown = null;
     const text = await res.text();
@@ -413,6 +417,9 @@ export const voice = {
       timeoutMs: AI_TIMEOUT,
       retries: 1,
     }),
+  /** The text spoken in a natural voice (WAV). On failure, fall back to the browser's voice. */
+  speak: (text: string, signal?: AbortSignal) =>
+    request<Blob>("/voice/speak", { method: "POST", json: { text }, raw: true, timeoutMs: 30_000, signal }),
   sessions: (q: { q?: string; limit?: number; offset?: number } = {}) =>
     request<Page<VoiceSessionSummary>>("/voice/sessions", { query: q }),
   session: (id: string) => request<VoiceSessionDetail>(`/voice/sessions/${encodeURIComponent(id)}`),
