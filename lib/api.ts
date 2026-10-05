@@ -277,6 +277,53 @@ export async function request<T>(path: string, opts: RequestOptions = {}): Promi
   }
 }
 
+/**
+ * POST that hands back the response body as a stream (e.g. audio) instead of
+ * waiting for all of it. The timeout only covers getting a response started.
+ */
+async function requestStream(
+  path: string,
+  json: unknown,
+  signal?: AbortSignal,
+  startTimeoutMs = 20_000
+): Promise<ReadableStream<Uint8Array>> {
+  const token = getToken();
+  if (!token) throw new ApiError(fallbackMessage(401), 401, "UNAUTHENTICATED");
+  const ctrl = new AbortController();
+  const onAbort = () => ctrl.abort();
+  signal?.addEventListener("abort", onAbort, { once: true });
+  const timer = setTimeout(() => ctrl.abort(), startTimeoutMs);
+  let res: Response;
+  try {
+    res = await fetch(buildUrl(path), {
+      method: "POST",
+      headers: { Accept: "*/*", "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+      body: JSON.stringify(json),
+      signal: ctrl.signal,
+      cache: "no-store",
+    });
+  } catch (err) {
+    signal?.removeEventListener("abort", onAbort);
+    if (signal?.aborted) throw err;
+    throw new ApiError(fallbackMessage(0), 0, "NETWORK");
+  } finally {
+    clearTimeout(timer);
+  }
+  if (!res.ok || !res.body) {
+    signal?.removeEventListener("abort", onAbort);
+    let body: unknown = null;
+    try {
+      body = await res.json();
+    } catch {}
+    const code =
+      body && typeof body === "object" && typeof (body as { code?: unknown }).code === "string"
+        ? (body as { code: string }).code
+        : null;
+    throw new ApiError(messageFrom(body, res.status), res.status, code, body);
+  }
+  return res.body;
+}
+
 export const newIdempotencyKey = () =>
   typeof crypto !== "undefined" && "randomUUID" in crypto
     ? crypto.randomUUID()
@@ -420,6 +467,8 @@ export const voice = {
   /** The text spoken in a natural voice (WAV). On failure, fall back to the browser's voice. */
   speak: (text: string, signal?: AbortSignal) =>
     request<Blob>("/voice/speak", { method: "POST", json: { text }, raw: true, timeoutMs: 30_000, signal }),
+  /** Same voice as raw 24 kHz PCM, arriving while it is generated — play with PcmStreamPlayer. */
+  speakStream: (text: string, signal?: AbortSignal) => requestStream("/voice/speak/stream", { text }, signal),
   sessions: (q: { q?: string; limit?: number; offset?: number } = {}) =>
     request<Page<VoiceSessionSummary>>("/voice/sessions", { query: q }),
   session: (id: string) => request<VoiceSessionDetail>(`/voice/sessions/${encodeURIComponent(id)}`),

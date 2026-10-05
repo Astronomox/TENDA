@@ -3,8 +3,9 @@
 /**
  * Voice Assistant — POST /voice/ask (spoken questions), POST /ai/chat (quick
  * commands), session history from /voice/sessions (BACKEND_README.md §11).
- * Answers are read aloud in a natural voice from POST /voice/speak, falling
- * back to the browser's speech synthesis if that fails. Spoken sales are saved
+ * Answers are read aloud in a natural voice streamed from POST
+ * /voice/speak/stream (playback starts with the first chunk), falling back to
+ * the browser's speech synthesis only if that fails. Spoken sales are saved
  * by /voice/ask, so the cached sales/analytics data is refreshed afterwards.
  */
 
@@ -18,13 +19,13 @@ import { ai, ApiError, voice } from "@/lib/api";
 import { invalidate, useResource } from "@/lib/hooks";
 import { date, dayGroup, duration, time } from "@/lib/format";
 import { MAX_RECORDING_SEC, useRecorder } from "@/lib/useRecorder";
+import { PcmStreamPlayer } from "@/lib/pcmPlayer";
 import { toPlainText } from "@/components/RichText";
 import { ErrorState } from "@/components/ui";
 
 const SPEAKER_KEY = "tenda_voice_speaker";
-// A tiny silent clip played during a tap so mobile browsers allow audio later.
-const SILENT_WAV = "data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAQB8AAIA+AAACABAAZGF0YQAAAAA=";
-const MAX_SPOKEN_CHARS = 700;
+const MAX_SPOKEN_CHARS = 450; // the server keeps voice answers short; this is a safety net
+const NO_SPEECH_MESSAGE = "I couldn't hear anything. Please try again a little closer to the microphone.";
 
 /** What gets read aloud: plain text, naira said naturally, long answers trimmed at a sentence. */
 function spokenText(text: string): string {
@@ -71,17 +72,16 @@ export default function VoiceAssistantPage() {
   const [speakerOn, setSpeakerOn] = useState(true);
   const sessions = useResource("voice:sessions", () => voice.sessions({ limit: 50 }));
   const runRef = useRef(0);
-  const audioRef = useRef<HTMLAudioElement | null>(null);
-  const audioUrlRef = useRef<string | null>(null);
+  const playerRef = useRef<PcmStreamPlayer | null>(null);
   const speechAbortRef = useRef<AbortController | null>(null);
-  const finishAudioRef = useRef<(() => void) | null>(null);
+
+  const player = useCallback(() => (playerRef.current ??= new PcmStreamPlayer()), []);
 
   /** Stop anything being fetched or spoken. */
   const stopSpeech = useCallback(() => {
     speechAbortRef.current?.abort();
     speechAbortRef.current = null;
-    finishAudioRef.current?.();
-    audioRef.current?.pause();
+    playerRef.current?.stop();
     if (typeof window !== "undefined") window.speechSynthesis?.cancel();
   }, []);
 
@@ -92,46 +92,12 @@ export default function VoiceAssistantPage() {
   }, [stopSpeech]);
 
   /** Call from a tap handler: mobile browsers only allow audio that a tap started. */
-  const unlockAudio = useCallback(() => {
-    if (typeof Audio === "undefined") return;
-    if (!audioRef.current) audioRef.current = new Audio();
-    const a = audioRef.current;
-    if (!a.paused) return;
-    a.src = SILENT_WAV;
-    a.play().catch(() => {});
-  }, []);
+  const unlockAudio = useCallback(() => player().unlock(), [player]);
 
   const voiceState: VoiceState =
     rec.state !== "idle" ? "listening" : busy === "processing" ? "processing" : busy === "speaking" ? "speaking" : "idle";
 
   const add = (entry: TranscriptEntry) => setTranscript((prev) => [...prev, entry]);
-
-  /** Play a WAV; resolves "ended", "stopped" (stopSpeech) or "failed". */
-  const playAudio = useCallback(
-    (blob: Blob) =>
-      new Promise<"ended" | "stopped" | "failed">((resolve) => {
-        if (!audioRef.current) audioRef.current = new Audio();
-        const a = audioRef.current;
-        const url = URL.createObjectURL(blob);
-        audioUrlRef.current = url;
-        const done = (result: "ended" | "stopped" | "failed") => {
-          a.onended = a.onerror = null;
-          finishAudioRef.current = null;
-          if (audioUrlRef.current === url) {
-            URL.revokeObjectURL(url);
-            audioUrlRef.current = null;
-          }
-          resolve(result);
-        };
-        finishAudioRef.current = () => done("stopped");
-        a.onended = () => done("ended");
-        a.onerror = () => done("failed");
-        a.src = url;
-        setBusy("speaking");
-        a.play().catch(() => done("failed"));
-      }),
-    []
-  );
 
   /** Fallback: the browser's built-in voice. */
   const speakWithBrowser = useCallback(
@@ -163,21 +129,22 @@ export default function VoiceAssistantPage() {
       stopSpeech();
       const ctrl = new AbortController();
       speechAbortRef.current = ctrl;
-      let blob: Blob | null = null;
-      try {
-        blob = await voice.speak(words, ctrl.signal);
-      } catch {
-        // busy / not configured / offline: use the browser's voice instead
+      const p = player();
+      if (p.supported) {
+        try {
+          const stream = await voice.speakStream(words, ctrl.signal);
+          if (ctrl.signal.aborted) return;
+          const result = await p.play(stream, () => setBusy("speaking"));
+          if (result !== "failed") return;
+        } catch {
+          // busy / not configured / offline: use the browser's voice instead
+        }
       }
       if (ctrl.signal.aborted) return;
       speechAbortRef.current = null;
-      if (blob && blob.size > 0) {
-        const result = await playAudio(blob);
-        if (result !== "failed") return;
-      }
       await speakWithBrowser(words);
     },
-    [speakerOn, stopSpeech, playAudio, speakWithBrowser]
+    [speakerOn, stopSpeech, player, speakWithBrowser]
   );
 
   function toggleSpeaker() {
@@ -204,6 +171,11 @@ export default function VoiceAssistantPage() {
     const recording = await rec.stop();
     if (!recording || recording.durationSec < 0.5) {
       setError("That was too short. Tap the orb, ask your question, then tap again to send.");
+      return;
+    }
+    if (!recording.hasSpeech) {
+      // Nothing but silence: don't send it (the AI could otherwise "hear" words that weren't said).
+      setError(NO_SPEECH_MESSAGE);
       return;
     }
     const run = ++runRef.current;
@@ -238,7 +210,7 @@ export default function VoiceAssistantPage() {
       setTranscript((prev) => prev.filter((e) => e.id !== placeholderId));
       setError(
         err instanceof ApiError && err.code === "NO_SPEECH"
-          ? "I couldn't hear anything. Please try again a little closer to the microphone."
+          ? NO_SPEECH_MESSAGE
           : err instanceof Error
             ? err.message
             : "Voice processing failed."
