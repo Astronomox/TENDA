@@ -86,10 +86,30 @@ export function setTokens(access: string, refresh?: string | null) {
   emit();
 }
 
+/**
+ * Data remembered on this device for instant repeat visits (see lib/hooks.ts),
+ * stored as `${CACHE_PREFIX}${email}:${key}`.
+ */
+export const CACHE_PREFIX = "tenda_cache:";
+
+/** Forget everything remembered on this device (logout, expiry, account switch). */
+export function clearStoredCache() {
+  try {
+    const store = window.localStorage;
+    for (let i = store.length - 1; i >= 0; i--) {
+      const k = store.key(i);
+      if (k?.startsWith(CACHE_PREFIX)) store.removeItem(k);
+    }
+  } catch {
+    // storage blocked: nothing was stored
+  }
+}
+
 export function clearTokens() {
   safeSet(TOKEN_KEY, null);
   safeSet(REFRESH_KEY, null);
   setSessionCookie(false);
+  clearStoredCache();
   emit();
 }
 

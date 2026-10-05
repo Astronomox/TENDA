@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { ApiError } from "@/lib/api";
+import { CACHE_PREFIX, clearStoredCache, getClaims } from "@/lib/auth";
 
 export interface Resource<T> {
   data: T | undefined;
@@ -13,16 +14,64 @@ export interface Resource<T> {
   setData: (updater: T | ((prev: T | undefined) => T)) => void;
 }
 
-// Tiny in-memory cache so moving between pages shows the last data instantly
-// while a fresh copy loads in the background.
+// Cache so moving between pages - and coming back to the app later - shows the
+// last data instantly while a fresh copy loads in the background. Kept in memory
+// and, per user, in localStorage (cleared on logout/expiry by lib/auth).
 const cache = new Map<string, unknown>();
+
+// Conversations and voice sessions are private and change constantly: memory only.
+const NOT_STORED = /^(ai:|voice:)/;
+const MAX_STORED_CHARS = 250_000;
+
+function storageKey(key: string): string | null {
+  const who = getClaims()?.email;
+  return who && !NOT_STORED.test(key) ? `${CACHE_PREFIX}${who}:${key}` : null;
+}
+
+function readCached<T>(key: string): T | undefined {
+  if (cache.has(key)) return cache.get(key) as T;
+  const sk = storageKey(key);
+  if (!sk) return undefined;
+  try {
+    const raw = window.localStorage.getItem(sk);
+    if (raw === null) return undefined;
+    const value = JSON.parse(raw) as T;
+    cache.set(key, value);
+    return value;
+  } catch {
+    return undefined;
+  }
+}
+
+function writeCached(key: string, value: unknown) {
+  cache.set(key, value);
+  const sk = storageKey(key);
+  if (!sk) return;
+  try {
+    const raw = JSON.stringify(value);
+    if (raw.length <= MAX_STORED_CHARS) window.localStorage.setItem(sk, raw);
+  } catch {
+    // storage full or blocked: memory cache still works
+  }
+}
 
 export function invalidate(prefix: string) {
   for (const key of cache.keys()) if (key.startsWith(prefix)) cache.delete(key);
+  const who = getClaims()?.email;
+  if (!who) return;
+  try {
+    const store = window.localStorage;
+    const start = `${CACHE_PREFIX}${who}:${prefix}`;
+    for (let i = store.length - 1; i >= 0; i--) {
+      const k = store.key(i);
+      if (k?.startsWith(start)) store.removeItem(k);
+    }
+  } catch {}
 }
 
 export function clearCache() {
   cache.clear();
+  clearStoredCache();
 }
 
 function toApiError(err: unknown): ApiError {
@@ -35,7 +84,7 @@ function toApiError(err: unknown): ApiError {
  * @param key cache key; pass null to skip loading (e.g. missing id).
  */
 export function useResource<T>(key: string | null, fetcher: () => Promise<T>): Resource<T> {
-  const [data, setDataState] = useState<T | undefined>(() => (key ? (cache.get(key) as T | undefined) : undefined));
+  const [data, setDataState] = useState<T | undefined>(() => (key ? readCached<T>(key) : undefined));
   const [error, setError] = useState<ApiError | null>(null);
   const [loading, setLoading] = useState<boolean>(!!key);
   const fetcherRef = useRef(fetcher);
@@ -54,7 +103,7 @@ export function useResource<T>(key: string | null, fetcher: () => Promise<T>): R
     try {
       const result = await fetcherRef.current();
       if (run !== runRef.current) return;
-      cache.set(key, result);
+      writeCached(key, result);
       loadedAtRef.current = Date.now();
       setDataState(result);
     } catch (err) {
@@ -68,7 +117,7 @@ export function useResource<T>(key: string | null, fetcher: () => Promise<T>): R
   useEffect(() => {
     // Show cached data for this key immediately, then refresh.
     // eslint-disable-next-line react-hooks/set-state-in-effect -- syncing to a changed cache key
-    setDataState(key ? (cache.get(key) as T | undefined) : undefined);
+    setDataState(key ? readCached<T>(key) : undefined);
     void load();
   }, [key, load]);
 
@@ -86,7 +135,7 @@ export function useResource<T>(key: string | null, fetcher: () => Promise<T>): R
     (updater: T | ((prev: T | undefined) => T)) => {
       setDataState((prev) => {
         const next = typeof updater === "function" ? (updater as (p: T | undefined) => T)(prev) : updater;
-        if (key) cache.set(key, next);
+        if (key) writeCached(key, next);
         return next;
       });
     },

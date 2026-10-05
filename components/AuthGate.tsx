@@ -1,8 +1,8 @@
 "use client";
 
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
-import { auth as authApi, warmUp } from "@/lib/api";
-import { getClaims, getToken, redirectToLogin, setSessionCookie, useToken } from "@/lib/auth";
+import { auth as authApi } from "@/lib/api";
+import { CACHE_PREFIX, getClaims, getToken, redirectToLogin, setSessionCookie, useToken } from "@/lib/auth";
 import { clearCache } from "@/lib/hooks";
 import Logo from "@/components/Logo";
 import type { User } from "@/lib/types";
@@ -24,9 +24,25 @@ export function useCurrentUser(): CurrentUser {
   return ctx;
 }
 
+// The profile is remembered on this device so "Hello, <name>" is right on the
+// first paint instead of switching from the email once /auth/me answers.
+const profileKey = (email: string) => `${CACHE_PREFIX}${email}:auth:me`;
+
+function rememberProfile(user: User) {
+  const email = getClaims()?.email;
+  if (!email) return;
+  try {
+    window.localStorage.setItem(profileKey(email), JSON.stringify(user));
+  } catch {}
+}
+
 function fallbackUser(): User {
-  const claims = getClaims();
-  return { id: "", email: claims?.email ?? "", full_name: null };
+  const email = getClaims()?.email ?? "";
+  try {
+    const raw = email ? window.localStorage.getItem(profileKey(email)) : null;
+    if (raw) return JSON.parse(raw) as User;
+  } catch {}
+  return { id: "", email, full_name: null };
 }
 
 /**
@@ -44,7 +60,9 @@ export default function AuthGate({ children }: { children: React.ReactNode }) {
 
   const refreshUser = useCallback(async () => {
     try {
-      setUser(await authApi.me());
+      const me = await authApi.me();
+      rememberProfile(me);
+      setUser(me);
     } catch {
       // /auth/me not built yet (or offline): fall back to the email in the token.
       setUser((prev) => prev ?? fallbackUser());
@@ -52,7 +70,6 @@ export default function AuthGate({ children }: { children: React.ReactNode }) {
   }, []);
 
   useEffect(() => {
-    warmUp();
     // The Back button can restore a page from the browser's cache without
     // re-running this guard; check again so a signed-out user can't see it.
     const onPageShow = (e: PageTransitionEvent) => {
