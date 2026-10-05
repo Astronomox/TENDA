@@ -13,6 +13,13 @@ import { useSyncExternalStore } from "react";
 
 const TOKEN_KEY = "tenda_token";
 const REFRESH_KEY = "tenda_refresh_token";
+/**
+ * A "signed in" marker the server can see, so proxy.ts can send signed-out
+ * visitors to /login before a dashboard page renders. It holds no secret:
+ * the backend still checks the real token on every request.
+ */
+export const SESSION_COOKIE = "tenda_session";
+const SESSION_MAX_AGE = 30 * 24 * 60 * 60; // matches the refresh token lifetime
 
 export interface TokenClaims {
   email: string;
@@ -65,15 +72,24 @@ export function getRefreshToken(): string | null {
   return safeGet(REFRESH_KEY);
 }
 
+/** Set or clear the server-visible "signed in" marker. */
+export function setSessionCookie(signedIn: boolean) {
+  if (typeof document === "undefined") return;
+  const secure = window.location.protocol === "https:" ? "; Secure" : "";
+  document.cookie = `${SESSION_COOKIE}=${signedIn ? "1" : ""}; Path=/; Max-Age=${signedIn ? SESSION_MAX_AGE : 0}; SameSite=Lax${secure}`;
+}
+
 export function setTokens(access: string, refresh?: string | null) {
   safeSet(TOKEN_KEY, access);
   if (refresh !== undefined) safeSet(REFRESH_KEY, refresh ?? null);
+  setSessionCookie(true);
   emit();
 }
 
 export function clearTokens() {
   safeSet(TOKEN_KEY, null);
   safeSet(REFRESH_KEY, null);
+  setSessionCookie(false);
   emit();
 }
 
@@ -81,13 +97,17 @@ export function getClaims(): TokenClaims | null {
   return decodeToken(getToken());
 }
 
-/** Navigates to the login page, preserving where the user was. */
+/**
+ * Navigates to the login page, preserving where the user was. Uses replace()
+ * so the Back button can't return to the protected page.
+ */
 export function redirectToLogin(expired = false) {
   if (typeof window === "undefined") return;
+  setSessionCookie(false);
   if (window.location.pathname.startsWith("/login")) return;
   const params = new URLSearchParams({ next: window.location.pathname + window.location.search });
   if (expired) params.set("expired", "1");
-  window.location.assign(`/login?${params}`);
+  window.location.replace(`/login?${params}`);
 }
 
 /** Only allow same-site relative paths as post-login destinations. */

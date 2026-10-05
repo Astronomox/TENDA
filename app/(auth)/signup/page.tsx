@@ -4,7 +4,7 @@ import React, { Suspense, useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { auth, warmUp } from "@/lib/api";
-import { getToken, safeNext } from "@/lib/auth";
+import { getToken, safeNext, setSessionCookie } from "@/lib/auth";
 import { Spinner } from "@/components/ui";
 import { Eye, EyeOff } from "lucide-react";
 
@@ -25,7 +25,10 @@ function SignupForm() {
 
   useEffect(() => {
     warmUp();
-    if (getToken()) router.replace(next);
+    if (getToken()) {
+      setSessionCookie(true); // proxy.ts lets the dashboard through only with this cookie
+      router.replace(next);
+    }
   }, [router, next]);
 
   function validate(): string | null {
