@@ -4,6 +4,7 @@ import React, { createContext, useCallback, useContext, useEffect, useMemo, useS
 import { auth as authApi, warmUp } from "@/lib/api";
 import { getClaims, getToken, redirectToLogin, setSessionCookie, useToken } from "@/lib/auth";
 import { clearCache } from "@/lib/hooks";
+import Logo from "@/components/Logo";
 import type { User } from "@/lib/types";
 
 interface CurrentUser {
@@ -99,7 +100,7 @@ export default function AuthGate({ children }: { children: React.ReactNode }) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-[#FAFAF8]">
         <div className="flex flex-col items-center gap-3">
-          <span className="font-display font-extrabold text-2xl text-[#E85D04]">TENDA</span>
+          <Logo tone="brand" priority />
           <span className="w-6 h-6 rounded-full border-2 border-[#FFD4B3] border-t-[#E85D04] animate-spin" />
         </div>
       </div>
