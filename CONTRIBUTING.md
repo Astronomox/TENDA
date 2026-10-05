@@ -7,3 +7,6 @@
 5. Use clear commit messages, e.g. `feat(customers): add sort selector`.
 
 Money is always Naira (₦) and dates use Africa/Lagos time; use the helpers in `lib/format.ts`.
+
+Never use the browser's `window.confirm` / `alert` / `prompt`: ask with `useConfirm()` from
+`components/ConfirmDialog.tsx` so dialogs look like TENDA on every phone.

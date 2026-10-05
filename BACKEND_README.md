@@ -1,6 +1,6 @@
 # TENDA Backend Contract
 
-> **Status (Oct 2026):** implemented in the TENDA API v1.4.0. All endpoints the frontend calls were verified end to end.
+> **Status (Oct 2026):** implemented in the TENDA API v1.4.0 (FastAPI on Render, PostgreSQL on Neon). All endpoints the frontend calls were verified end to end. Since then: spoken sales through `/voice/ask` and streamed natural-voice answers (§11.2, §11.5). §1 below is the original audit, kept for history.
 
 > **What this document is:** the complete specification of what the TENDA backend
 > (`https://tenda-api.onrender.com`, FastAPI) must provide so that the TENDA
@@ -909,15 +909,25 @@ Requirements:
 ```json
 {
   "session_id": "vs_...",
-  "question": "How much did I make this week?",   // the transcript — NEW, shown in the transcript UI
+  "question": "How much did I make this week?",   // the transcript, shown in the transcript UI
   "answer": "You've made ₦84,500 this week from 12 sales. Shea Butter is your best seller.",
-  "created_at": "..."
+  "created_at": "...",
+  "intent": "question",          // or "log_sale" when the owner reported a sale
+  "sale": null,                  // the saved Sale (§10.1) when a spoken sale was recorded
+  "draft": null,                 // what was understood for a spoken sale (same shape as §11.3 draft)
+  "missing_fields": []           // e.g. ["amount"] when a sale was heard but not saved
 }
 ```
 
-- The answer must be grounded in the user's data exactly like chat (§15.1).
-- Answers are **spoken back** by the frontend (browser speech synthesis), so: plain text,
-  no markdown, no tables, ≤ 600 characters, numbers written as `₦84,500`.
+- The answer must be grounded in the user's data exactly like chat (§15.1); calculations are worked out step by step.
+- **Spoken sales**: "I sold two shea butter to Peter for nine thousand" is matched against the
+  catalogue and customers like §11.3 and saved; `answer` confirms what was recorded. Unclear sales
+  (no product, no price, low confidence) are read back and **not** saved. A retried request with the
+  same audio returns the first result instead of saving twice.
+- Only words actually heard are transcribed; silence or noise → `422 NO_SPEECH` (the frontend also
+  refuses to send recordings with no voice).
+- Answers are **spoken back** (§11.5), so: plain text, no markdown, no tables, 2–3 short sentences
+  (about 350 characters), numbers written as `₦84,500`.
 
 ### 11.3 `POST /voice/log-sale`
 
@@ -1000,6 +1010,18 @@ The Voice screen has a "Session history" sidebar (search, delete, select to repl
 - `title` = first question truncated to 60 chars (or AI-generated short title).
 - `duration_sec` = sum of audio durations in the session.
 - `preview` = last answer truncated to 120 chars.
+
+### 11.5 Spoken answers (natural voice)
+
+| Method | Path | Body | Response |
+|---|---|---|---|
+| POST | `/voice/speak/stream` | `{"text": "..."}` (1–1000 chars) | raw 16-bit little-endian mono PCM at 24 kHz (`audio/L16`), sent while it is generated |
+| POST | `/voice/speak` | same | the same speech as one WAV file |
+
+- Gemini text-to-speech (`gemini-3.8-flash-lite-tts`, backup `gemini-3.8-flash-tts`, voice "Sulafat");
+  finished answers are cached, so replays are instant.
+- On `503 AI_UNAVAILABLE` (busy, quota, not configured) the frontend falls back to the browser's own voice.
+- The frontend plays the stream chunk by chunk (`lib/pcmPlayer.ts`), so speech starts within a second or two.
 
 ---
 
@@ -1536,7 +1558,7 @@ the nearest ₦500, formatted `"Est. ₦36,000"`. If fewer than 3 historical sal
 | Log sale — Speak it | – | `POST /voice/log-sale?dry_run=true` → confirm → `POST /sales` (source voice) |
 | Follow-ups (`/follow-up`) | `GET /follow-ups` | Message → wa.me + `POST /follow-ups/{key}/done`; Call → tel: + `done`; Snooze → `POST …/snooze` |
 | AI Chat (`/ai-assistant`) | `GET /ai/conversations`; `GET /analytics/summary` (context badge) | `POST /ai/chat`; select → `GET /ai/conversations/{id}`; delete → `DELETE` |
-| Voice (`/voice-assistant`) | `GET /voice/sessions` | Record → `POST /voice/ask`; quick command → `POST /ai/chat`; delete session → `DELETE /voice/sessions/{id}` |
+| Voice (`/voice-assistant`) | `GET /voice/sessions` | Record → `POST /voice/ask` (questions or spoken sales); answer read aloud → `POST /voice/speak/stream`; quick command → `POST /ai/chat`; delete session → `DELETE /voice/sessions/{id}` |
 | Insights (`/insights`) | `GET /insights?range=30d`; `GET /analytics/timeseries?range=…`; `GET /analytics/products?range=…` | Refresh → `POST /insights/refresh`; CTAs navigate via `cta_route` |
 | Settings (`/settings`) | `GET /auth/me`; `GET /business/profile` | Log out |
 | Settings → Business info | `GET /business/profile` | `PUT /business/profile {business_name, currency}`; `PATCH /auth/me {full_name}` |
