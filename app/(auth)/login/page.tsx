@@ -109,11 +109,6 @@ function LoginForm() {
             "Sign in →"
           )}
         </button>
-        {loading && (
-          <p className="text-xs text-[#A0AEC0] text-center -mt-2">
-            The first sign-in of the day can take up to a minute while the server wakes up.
-          </p>
-        )}
       </form>
 
       <p className="text-sm text-[#4A5568] text-center mt-8">
