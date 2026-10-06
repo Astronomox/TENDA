@@ -21,37 +21,12 @@ import { date, dayGroup, duration, time } from "@/lib/format";
 import { MAX_RECORDING_SEC, useRecorder } from "@/lib/useRecorder";
 import { PcmStreamPlayer } from "@/lib/pcmPlayer";
 import { toPlainText } from "@/components/RichText";
+import { bestVoice, spokenText } from "@/lib/speech";
 import { ErrorState } from "@/components/ui";
 import { useConfirm } from "@/components/ConfirmDialog";
 
 const SPEAKER_KEY = "tenda_voice_speaker";
-const MAX_SPOKEN_CHARS = 450; // the server keeps voice answers short; this is a safety net
 const NO_SPEECH_MESSAGE = "I couldn't hear anything. Please try again a little closer to the microphone.";
-
-/** What gets read aloud: plain text, naira said naturally, long answers trimmed at a sentence. */
-function spokenText(text: string): string {
-  let t = toPlainText(text)
-    .replace(/^\s*[-•]\s+/gm, "")
-    .replace(/₦\s?([\d,]+(?:\.\d+)?)/g, "$1 naira")
-    .replace(/\s+/g, " ")
-    .trim();
-  if (t.length > MAX_SPOKEN_CHARS) {
-    const cut = t.slice(0, MAX_SPOKEN_CHARS);
-    const end = Math.max(cut.lastIndexOf(". "), cut.lastIndexOf("! "), cut.lastIndexOf("? "));
-    t = end > 200 ? cut.slice(0, end + 1) : cut;
-  }
-  return t;
-}
-
-/** The most natural-sounding English voice the browser has (fallback only). */
-function pickBrowserVoice(): SpeechSynthesisVoice | undefined {
-  const voices = window.speechSynthesis.getVoices().filter((v) => v.lang?.toLowerCase().startsWith("en"));
-  const score = (v: SpeechSynthesisVoice) =>
-    (/natural|neural|online/i.test(v.name) ? 4 : 0) +
-    (/google/i.test(v.name) ? 2 : 0) +
-    (/en-ng/i.test(v.lang) ? 3 : /en-(gb|us)/i.test(v.lang) ? 1 : 0);
-  return [...voices].sort((a, b) => score(b) - score(a))[0];
-}
 
 let seq = 0;
 const entryId = (p: string) => `${p}-${Date.now()}-${++seq}`;
@@ -109,7 +84,7 @@ export default function VoiceAssistantPage() {
         if (!synth || typeof SpeechSynthesisUtterance === "undefined") return resolve();
         synth.cancel();
         const u = new SpeechSynthesisUtterance(text);
-        const v = pickBrowserVoice();
+        const v = bestVoice(window.speechSynthesis.getVoices());
         if (v) u.voice = v;
         u.lang = v?.lang ?? "en-NG";
         u.rate = 1;
