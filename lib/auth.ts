@@ -10,15 +10,17 @@
  */
 
 import { useSyncExternalStore } from "react";
+import { SESSION_COOKIE } from "@/lib/session";
+
+export { SESSION_COOKIE };
 
 const TOKEN_KEY = "tenda_token";
 const REFRESH_KEY = "tenda_refresh_token";
 /**
  * A "signed in" marker the server can see, so proxy.ts can send signed-out
  * visitors to /login before a dashboard page renders. It holds no secret:
- * the backend still checks the real token on every request.
+ * the backend still checks the real token on every request. (Name in lib/session.ts.)
  */
-export const SESSION_COOKIE = "tenda_session";
 const SESSION_MAX_AGE = 30 * 24 * 60 * 60; // matches the refresh token lifetime
 
 export interface TokenClaims {

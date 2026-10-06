@@ -12,6 +12,7 @@
 
 import React, { createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
 import { AlertTriangle, HelpCircle } from "lucide-react";
+import { useOverlay } from "@/lib/useOverlay";
 
 export interface ConfirmOptions {
   title: string;
@@ -76,32 +77,26 @@ function Dialog({
   const cancelRef = useRef<HTMLButtonElement>(null);
   const confirmRef = useRef<HTMLButtonElement>(null);
   const danger = tone === "danger";
+  useOverlay(() => onAnswer(false)); // scroll lock + Escape cancels
 
   useEffect(() => {
     const previous = document.activeElement as HTMLElement | null;
     // Safer default for destructive actions: focus Cancel.
     (danger ? cancelRef : confirmRef).current?.focus();
-    const overflow = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") {
-        e.preventDefault();
-        onAnswer(false);
-      } else if (e.key === "Tab") {
-        // keep focus inside the two buttons
-        const order = [cancelRef.current, confirmRef.current].filter(Boolean) as HTMLElement[];
-        const i = order.indexOf(document.activeElement as HTMLElement);
-        e.preventDefault();
-        order[(i + (e.shiftKey ? order.length - 1 : 1)) % order.length]?.focus();
-      }
+      if (e.key !== "Tab") return;
+      // keep focus inside the two buttons
+      const order = [cancelRef.current, confirmRef.current].filter(Boolean) as HTMLElement[];
+      const i = order.indexOf(document.activeElement as HTMLElement);
+      e.preventDefault();
+      order[(i + (e.shiftKey ? order.length - 1 : 1)) % order.length]?.focus();
     };
     window.addEventListener("keydown", onKey);
     return () => {
       window.removeEventListener("keydown", onKey);
-      document.body.style.overflow = overflow;
       previous?.focus?.();
     };
-  }, [danger, onAnswer]);
+  }, [danger]);
 
   const Icon = danger ? AlertTriangle : HelpCircle;
 

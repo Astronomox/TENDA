@@ -1,4 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server";
+import { SESSION_COOKIE } from "@/lib/session";
 
 /**
  * Sends signed-out visitors to /login before a dashboard page renders, so a
@@ -8,7 +9,6 @@ import { NextResponse, type NextRequest } from "next/server";
  * the real check is the backend rejecting requests without a valid token, and
  * AuthGate still verifies the token in the browser.
  */
-const SESSION_COOKIE = "tenda_session"; // keep in sync with lib/auth.ts
 
 export function proxy(request: NextRequest) {
   if (request.cookies.get(SESSION_COOKIE)?.value) {

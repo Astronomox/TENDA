@@ -5,13 +5,14 @@
  * "More" sheet for everything else. (Desktop uses the sidebar in the layout.)
  */
 
-import React, { useEffect, useState } from "react";
+import React, { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
   Bot, ChevronRight, Clock, FileText, Home, LayoutGrid, LogOut, Mic, Plus, Receipt, Settings, Sparkles, Users, X,
 } from "lucide-react";
 import { useCurrentUser } from "@/components/AuthGate";
+import { useOverlay } from "@/lib/useOverlay";
 import { initials } from "@/lib/format";
 
 const TABS = [
@@ -103,17 +104,7 @@ function Tab({ href, label, icon: Icon, active }: { href: string; label: string;
 
 function MoreSheet({ isActive, onClose }: { isActive: (href: string) => boolean; onClose: () => void }) {
   const { user, displayName, logout } = useCurrentUser();
-
-  useEffect(() => {
-    const overflow = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-    const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
-    window.addEventListener("keydown", onKey);
-    return () => {
-      document.body.style.overflow = overflow;
-      window.removeEventListener("keydown", onKey);
-    };
-  }, [onClose]);
+  useOverlay(onClose); // scroll lock + Escape closes
 
   return (
     <div className="lg:hidden fixed inset-0 z-[60] flex items-end justify-center">
