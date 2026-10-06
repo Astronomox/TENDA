@@ -134,7 +134,10 @@ export function redirectToLogin(expired = false) {
 
 /** Only allow same-site relative paths as post-login destinations. */
 export function safeNext(next: string | null | undefined): string {
-  if (!next || !next.startsWith("/") || next.startsWith("//")) return "/dashboard";
+  // Browsers treat "\" like "/", so "/\evil.com" would leave the site just like "//evil.com".
+  if (!next || !next.startsWith("/") || next.startsWith("//") || next.includes("\\") || /[\u0000-\u001f]/.test(next)) {
+    return "/dashboard";
+  }
   return next;
 }
 
