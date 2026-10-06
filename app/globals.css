@@ -49,6 +49,15 @@ body {
   .animate-fade-in, .animate-sheet-up, .animate-rise-in { animation: tenda-fade-in 1ms both; }
 }
 
+/* "Updating..." trailing dots: three dots that light up one after another */
+@keyframes tenda-dot { 0%, 80%, 100% { opacity: 0.25; transform: translateY(0); } 40% { opacity: 1; transform: translateY(-2px); } }
+.updating-dots > span { width: 4px; height: 4px; border-radius: 9999px; background: currentColor; animation: tenda-dot 1.2s ease-in-out infinite both; }
+.updating-dots > span:nth-child(2) { animation-delay: 0.2s; }
+.updating-dots > span:nth-child(3) { animation-delay: 0.4s; }
+@media (prefers-reduced-motion: reduce) {
+  .updating-dots > span { animation: none; opacity: 0.7; }
+}
+
 /* Snap on the natural document scroll - no fragile inner container */
 .snap-section {
   scroll-snap-align: start;

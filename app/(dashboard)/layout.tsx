@@ -9,6 +9,7 @@ import AuthGate, { useCurrentUser } from "@/components/AuthGate";
 import Logo from "@/components/Logo";
 import { ConfirmProvider } from "@/components/ConfirmDialog";
 import MobileNav from "@/components/MobileNav";
+import UpdatingIndicator from "@/components/UpdatingIndicator";
 import { initials } from "@/lib/format";
 
 const NAV = [
@@ -107,13 +108,17 @@ function Shell({ children }: { children: React.ReactNode }) {
         <Link href="/dashboard" aria-label="TENDA home">
           <Logo size="sm" />
         </Link>
-        <NotificationPanel />
+        <div className="flex items-center gap-2">
+          <UpdatingIndicator />
+          <NotificationPanel />
+        </div>
       </header>
 
       {/* ===== MAIN CONTENT ===== */}
       <div className="flex-1 min-w-0 lg:pl-64">
         {/* Desktop top bar */}
-        <div className="hidden lg:flex h-20 items-center justify-end px-8 border-b border-[#E8E8E4] bg-white/80 backdrop-blur-md sticky top-0 z-30">
+        <div className="hidden lg:flex h-20 items-center justify-end gap-3 px-8 border-b border-[#E8E8E4] bg-white/80 backdrop-blur-md sticky top-0 z-30">
+          <UpdatingIndicator />
           <NotificationPanel />
         </div>
 

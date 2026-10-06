@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { ApiError } from "@/lib/api";
 import { CACHE_PREFIX, clearStoredCache, getClaims } from "@/lib/auth";
 
@@ -74,6 +74,28 @@ export function clearCache() {
   clearStoredCache();
 }
 
+// How many screens are showing remembered data while a fresh copy loads
+// (drives the "Updating..." hint in the top bar).
+let refreshing = 0;
+const refreshListeners = new Set<() => void>();
+
+function changeRefreshing(delta: number) {
+  refreshing = Math.max(0, refreshing + delta);
+  refreshListeners.forEach((l) => l());
+}
+
+/** True while any screen is quietly refreshing data it is already showing. */
+export function useRefreshing(): boolean {
+  return useSyncExternalStore(
+    (listener) => {
+      refreshListeners.add(listener);
+      return () => refreshListeners.delete(listener);
+    },
+    () => refreshing > 0,
+    () => false
+  );
+}
+
 function toApiError(err: unknown): ApiError {
   if (err instanceof ApiError) return err;
   return new ApiError(err instanceof Error ? err.message : "Something went wrong.", 0);
@@ -100,6 +122,9 @@ export function useResource<T>(key: string | null, fetcher: () => Promise<T>): R
     const run = ++runRef.current;
     setLoading(true);
     setError(null);
+    // Already showing something for this key? Then this is a background refresh.
+    const background = readCached(key) !== undefined;
+    if (background) changeRefreshing(1);
     try {
       const result = await fetcherRef.current();
       if (run !== runRef.current) return;
@@ -110,6 +135,7 @@ export function useResource<T>(key: string | null, fetcher: () => Promise<T>): R
       if (run !== runRef.current) return;
       setError(toApiError(err));
     } finally {
+      if (background) changeRefreshing(-1);
       if (run === runRef.current) setLoading(false);
     }
   }, [key]);
